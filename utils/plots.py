@@ -14,9 +14,8 @@ import numpy as np
 import pandas as pd
 import seaborn as sn
 import torch
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFont
 from scipy.ndimage.filters import gaussian_filter1d
-from ultralytics.utils.plotting import Annotator
 
 from utils import TryExcept, threaded
 from utils.general import LOGGER, clip_boxes, increment_path, xywh2xyxy, xyxy2xywh
@@ -26,6 +25,167 @@ from utils.metrics import fitness
 RANK = int(os.getenv("RANK", -1))
 matplotlib.rc("font", **{"size": 11})
 matplotlib.use("Agg")  # for writing to files only
+
+
+class Annotator:
+    """YOLOv5 Annotator for train/val mosaics and jpgs and detect/hub inference annotations."""
+
+    def __init__(
+        self, im, line_width=None, font_size=None, font="Arial.ttf", pil=False, example="abc"
+    ):
+        """Initialize the annotator with an image and parameters for text and box drawing."""
+        assert im.data.contiguous, "Image not contiguous. Apply np.ascontiguousarray(im) to Annotator() input images."
+        self.pil = pil or not is_ascii(example) or is_chinese(example)
+        if self.pil:  # use PIL
+            self.im = im if isinstance(im, Image.Image) else Image.fromarray(im)
+            self.draw = ImageDraw.Draw(self.im)
+            self.lw = line_width or max(round(sum(self.im.size) / 2 * 0.003), 2)  # line width
+            try:
+                font = check_font(font)
+                font_size = font_size or max(round(sum(self.im.size) / 2 * 0.035), 12)
+                self.font = ImageFont.truetype(str(font), font_size)
+            except Exception:
+                self.font = ImageFont.load_default()
+        else:  # use cv2
+            self.im = im
+            self.lw = line_width or max(round(sum(im.shape) / 2 * 0.003), 2)  # line width
+            self.tf = max(self.lw - 1, 1)  # font thickness
+            self.sf = self.tf  # font thickness
+            font_size = font_size or max(round(sum(im.shape) / 2 * 0.035), 12)
+            self.fs = max(font_size, 1)  # font size
+
+    def box_label(self, box, label="", color=(128, 128, 128), txt_color=(255, 255, 255)):
+        """Add a box and label to the image."""
+        # Add one xyxy box to image with label
+        if self.pil or not is_ascii(label):
+            self.draw.rectangle(box, width=self.lw, outline=color)  # box
+            if label:
+                w, h = self.font.getsize(label)  # text width, height
+                outside = box[1] - h >= 0  # label fits outside box
+                self.draw.rectangle(
+                    (box[0], box[1] - h if outside else box[1], box[0] + w + 1, box[1] + 1 if outside else box[1] + h + 1),
+                    fill=color,
+                )
+                # self.draw.text((box[0], box[1]), label, fill=txt_color, font=self.font, anchor='ls')  # for PIL>8.0
+                self.draw.text((box[0], box[1] - h if outside else box[1]), label, fill=txt_color, font=self.font)
+        else:  # cv2
+            p1, p2 = (int(box[0]), int(box[1])), (int(box[2]), int(box[3]))
+            cv2.rectangle(self.im, p1, p2, color, thickness=self.tf, lineType=cv2.LINE_AA)
+            if label:
+                w, h = cv2.getTextSize(label, 0, fontScale=self.fs, thickness=self.sf)[0]  # text width, height
+                outside = p1[1] - h >= 3
+                p2 = p1[0] + w, p1[1] - h - 3 if outside else p1[1] + h + 3
+                cv2.rectangle(self.im, p1, p2, color, -1, cv2.LINE_AA)  # filled
+                cv2.putText(
+                    self.im,
+                    label,
+                    (p1[0], p1[1] - 2 if outside else p1[1] + h + 2),
+                    0,
+                    self.fs,
+                    txt_color,
+                    thickness=self.sf,
+                    lineType=cv2.LINE_AA,
+                )
+
+    def masks(self, masks, colors, im_gpu=None, alpha=0.5):
+        """Plot masks on image."""
+        if self.pil:
+            # Convert RGBA to RGB
+            self.im = self.im.convert("RGBA")
+            overlay = Image.new("RGBA", self.im.size, (0, 0, 0, 0))
+            draw = ImageDraw.Draw(overlay)  # Draw on overlay for PIL
+            for i, (mask, color) in enumerate(zip(masks, colors)):
+                if color[3] > 0.5:  # color[3] is alpha
+                    mask = mask.reshape(mask.shape[0], mask.shape[1], 1) * color.reshape(1, 1, -1)
+                    im = Image.fromarray((mask * 255).astype("uint8"))
+                    draw.bitmap((0, 0), im, fill=(color[0], color[1], color[2], int(255 * alpha)))
+            self.im = Image.alpha_composite(self.im, overlay)
+            self.draw = ImageDraw.Draw(self.im)  # Update draw
+        else:
+            if im_gpu is None:
+                im_gpu = torch.as_tensor(self.im, dtype=torch.float16, device="cuda:0")
+            for i, (mask, color) in enumerate(zip(masks, colors)):
+                if color[3] > 0.5:  # color[3] is alpha
+                    mask = mask.reshape(mask.shape[0], mask.shape[1], 1) * color.reshape(1, 1, -1)
+                    im_gpu = im_gpu * (1.0 - mask * alpha) + mask * alpha
+            self.im = im_gpu.detach().cpu().numpy().astype("uint8")
+
+    def rectangle(self, xy, fill=None, outline=None, width=1):
+        """Add rectangle to image (PIL-only)."""
+        self.draw.rectangle(xy, fill, outline, width)
+
+    def text(self, xy, text, txt_color=(255, 255, 255), anchor="top", box_style=False):
+        """Adds text to image (PIL-only)."""
+        if anchor == "bottom":  # start y from font bottom
+            w, h = self.font.getsize(text)
+            xy[1] += 1 - h
+        if self.pil:
+            if box_style:
+                w, h = self.font.getsize(text)
+                self.draw.rectangle((xy[0], xy[1], xy[0] + w + 1, xy[1] + h + 1), fill=txt_color)
+                self.draw.text((xy[0], xy[1]), text, fill=(255, 255, 255), font=self.font)
+            else:
+                self.draw.text(xy, text, fill=txt_color, font=self.font)
+
+    def result(self):
+        """Return annotated image as array."""
+        return np.asarray(self.im)
+
+
+def is_ascii(s=""):
+    """Tests if a string is composed of only ASCII characters."""
+    # Convert list, tuple, None, etc. to string
+    s = str(s)
+    
+    # Check if all characters in the string are ASCII
+    return all(ord(c) < 128 for c in s)
+
+
+def is_chinese(s=""):
+    """Tests if a string contains Chinese characters."""
+    # Convert list, tuple, None, etc. to string
+    s = str(s)
+    
+    # Check if any character in the string is in the Chinese Unicode range
+    return any(0x4E00 <= ord(c) <= 0x9FFF for c in s)
+
+
+def check_font(font="Arial.ttf", size=10):
+    """
+    Checks if the specified font is available, and returns the font path or a default font path.
+    """
+    # Standard system locations for fonts
+    system_font_paths = [
+        "/usr/share/fonts",
+        "/usr/local/share/fonts",
+        "/Library/Fonts",
+        "C:\\Windows\\Fonts",
+        os.path.join(os.path.expanduser("~"), ".fonts"),
+    ]
+    
+    # Look for the font in the system paths
+    for path in system_font_paths:
+        if os.path.exists(path):
+            for root, dirs, files in os.walk(path):
+                if font in files:
+                    return os.path.join(root, font)
+    
+    # Return a default system font if the specified font is not found
+    try:
+        import matplotlib.font_manager as fm
+        system_fonts = fm.findSystemFonts()
+        # Try to get a font similar to the requested one
+        for f in system_fonts:
+            if "sans" in f.lower():
+                return f
+        # Or just return the first available font
+        if system_fonts:
+            return system_fonts[0]
+    except Exception:
+        pass
+    
+    # If all fails, return the default font
+    return "Arial.ttf"
 
 
 class Colors:
@@ -498,20 +658,41 @@ def profile_idetection(start=0, stop=0, labels=(), save_dir=""):
 
 
 def save_one_box(xyxy, im, file=Path("im.jpg"), gain=1.02, pad=10, square=False, BGR=False, save=True):
-    """Crops and saves an image from bounding box `xyxy`, applied with `gain` and `pad`, optionally squares and adjusts
-    for BGR.
     """
-    xyxy = torch.tensor(xyxy).view(-1, 4)
+    Save image crop as {file} with crop size multiplied by {gain} and padded by {pad} pixels.
+    
+    Args:
+        xyxy (torch.Tensor): Box coordinates (x1, y1, x2, y2) in pixels.
+        im (numpy.ndarray): Original image as a numpy array.
+        file (Path, optional): Output file path. Defaults to Path("im.jpg").
+        gain (float, optional): Box expansion factor. Defaults to 1.02.
+        pad (int, optional): Box padding in pixels. Defaults to 10.
+        square (bool, optional): Force square crop. Defaults to False.
+        BGR (bool, optional): If True, save BGR image instead of RGB. Defaults to False.
+        save (bool, optional): Save cropped image. Defaults to True.
+        
+    Returns:
+        (numpy.ndarray): Cropped image as a numpy array.
+    """
+    # Convert to numpy array if tensor
+    if isinstance(xyxy, torch.Tensor):
+        xyxy = xyxy.cpu().numpy()
+    
+    # Convert xyxy to integer coordinates (pixel positions)
+    xyxy = xyxy.reshape(-1, 4)
     b = xyxy2xywh(xyxy)  # boxes
     if square:
-        b[:, 2:] = b[:, 2:].max(1)[0].unsqueeze(1)  # attempt rectangle to square
+        b[:, 2:] = b[:, 2:].max(1)[0].reshape(-1, 1)  # attempt rectangle to square
     b[:, 2:] = b[:, 2:] * gain + pad  # box wh * gain + pad
-    xyxy = xywh2xyxy(b).long()
+    xyxy = xywh2xyxy(b).astype(int).reshape(-1, 4)
     clip_boxes(xyxy, im.shape)
-    crop = im[int(xyxy[0, 1]) : int(xyxy[0, 3]), int(xyxy[0, 0]) : int(xyxy[0, 2]), :: (1 if BGR else -1)]
+    
+    # Create crop
+    crop = im[int(xyxy[0, 1]):int(xyxy[0, 3]), int(xyxy[0, 0]):int(xyxy[0, 2]), ::(1 if BGR else -1)]
+    
+    # Save
     if save:
         file.parent.mkdir(parents=True, exist_ok=True)  # make directory
-        f = str(increment_path(file).with_suffix(".jpg"))
-        # cv2.imwrite(f, crop)  # save BGR, https://github.com/ultralytics/yolov5/issues/7007 chroma subsampling issue
-        Image.fromarray(crop[..., ::-1]).save(f, quality=95, subsampling=0)  # save RGB
+        cv2.imwrite(str(file), crop if BGR else cv2.cvtColor(crop, cv2.COLOR_RGB2BGR))
+    
     return crop
