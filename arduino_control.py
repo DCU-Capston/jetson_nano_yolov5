@@ -22,6 +22,8 @@ class ArduinoController:
         self.serial_conn = None
         self.connected = False
         self.last_command = '0'  # 초기 상태는 녹색 (감지 없음)
+        self.reconnect_attempts = 0
+        self.max_reconnect_attempts = 3
         
         # 연결 시도
         self.connect()
@@ -29,6 +31,10 @@ class ArduinoController:
     def connect(self):
         """아두이노에 연결 시도"""
         try:
+            if self.serial_conn and self.serial_conn.is_open:
+                self.serial_conn.close()
+                time.sleep(0.5)
+                
             self.serial_conn = serial.Serial(
                 port=self.port,
                 baudrate=self.baudrate,
@@ -36,6 +42,7 @@ class ArduinoController:
             )
             time.sleep(2)  # 아두이노 리셋 후 안정화 대기
             self.connected = True
+            self.reconnect_attempts = 0
             print(f"아두이노에 연결되었습니다. 포트: {self.port}")
             
             # 아두이노로부터 응답 읽기
@@ -65,6 +72,33 @@ class ArduinoController:
                     print(f"아두이노 응답: {response}")
         except Exception as e:
             print(f"응답 읽기 실패: {e}")
+            # 응답 읽기 실패시 연결 상태 확인
+            self._check_connection()
+    
+    def _check_connection(self):
+        """연결 상태 확인 및 재연결 시도"""
+        try:
+            # 포트가 열려있는지 확인
+            if not self.serial_conn or not self.serial_conn.is_open:
+                self.connected = False
+                
+            # DTR(Data Terminal Ready) 상태 확인 
+            self.serial_conn.dtr
+            return True
+        except Exception:
+            self.connected = False
+            print("아두이노 연결이 끊어졌습니다. 재연결을 시도합니다.")
+            
+            # 재연결 시도
+            if self.reconnect_attempts < self.max_reconnect_attempts:
+                self.reconnect_attempts += 1
+                print(f"재연결 시도 ({self.reconnect_attempts}/{self.max_reconnect_attempts})...")
+                time.sleep(1)
+                self.connect()
+            else:
+                print(f"최대 재연결 시도 횟수({self.max_reconnect_attempts})를 초과했습니다.")
+            
+            return self.connected
     
     def send_command(self, command):
         """
@@ -76,24 +110,33 @@ class ArduinoController:
                 '1': 빨간색 LED (감지됨)
         """
         if not self.connected:
-            print("아두이노에 연결되어 있지 않습니다.")
-            return False
+            if not self._check_connection():
+                print("아두이노에 연결되어 있지 않습니다.")
+                return False
         
         # 같은 명령이 연속적으로 발생하면 중복 전송하지 않음
         if command == self.last_command:
             return True
             
         try:
-            self.serial_conn.write(command.encode())
+            # 명령에 개행문자 추가하여 아두이노가 확실히 인식하도록 함
+            self.serial_conn.write((command + '\n').encode())
+            self.serial_conn.flush()  # 버퍼 내용 즉시 전송
             self.last_command = command
             print(f"아두이노에 명령 전송: {command}")
             
             # 응답 읽기
+            time.sleep(0.1)  # 응답 대기 시간
             self._read_response()
             
             return True
         except Exception as e:
             print(f"명령 전송 실패: {e}")
+            # 명령 전송 실패시 연결 확인 및 재시도
+            if self._check_connection() and self.reconnect_attempts < self.max_reconnect_attempts:
+                print("명령 재전송 시도...")
+                time.sleep(0.5)
+                return self.send_command(command)
             return False
     
     def set_green(self):

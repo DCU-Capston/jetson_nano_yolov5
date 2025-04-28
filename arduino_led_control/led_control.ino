@@ -13,8 +13,10 @@
 #define CIRCLE_RADIUS 4    // 원형 패턴의 반지름
 
 // 상태 변수
-char command;
+char command = '0';
 int detectionLevel = 0; // 0: 감지 없음(초록), 1: 감지됨(빨강)
+unsigned long lastCommandTime = 0;
+unsigned long serialTimeout = 1000; // 시리얼 타임아웃(밀리초)
 
 // 색상 정의
 uint32_t GREEN_COLOR;
@@ -27,10 +29,7 @@ uint32_t BLACK_COLOR;
 Adafruit_NeoPixel strip(LED_COUNT, LED_PIN, NEO_GRB + NEO_KHZ800);
 
 void setup() {
-  // 시리얼 통신 시작 (9600bps)
-  Serial.begin(9600);
-  
-  // NeoPixel 초기화
+  // 먼저 LED 초기화 (통신 시작 전에)
   strip.begin();
   strip.setBrightness(50); // 밝기 설정 (0-255)
   strip.show(); // 모든 픽셀 끄기로 초기화
@@ -43,36 +42,21 @@ void setup() {
   // 초기 LED 색상은 초록색 원형으로 설정
   setCirclePattern(GREEN_COLOR);
   
+  // 시리얼 통신 시작 (9600bps)
+  Serial.begin(9600);
+  while (!Serial) {
+    ; // 시리얼 포트가 연결될 때까지 대기 (USB 연결만 해당)
+  }
+  
+  // 초기화 메시지 전송
   Serial.println("WS2812B-64 LED 제어 시작 (원형 패턴)");
+  // 핑 메시지 전송 (연결 확인용)
+  Serial.println("PING");
 }
 
 void loop() {
   // 시리얼 통신으로부터 명령 수신
-  if (Serial.available() > 0) {
-    command = Serial.read();
-    
-    // 명령에 따라 LED 색상 변경
-    if (command == '0') {
-      // 감지 없음 - 초록색
-      detectionLevel = 0;
-      if (USE_SMOOTH_TRANSITION) {
-        fadeToCirclePattern(GREEN_COLOR, TRANSITION_DURATION);
-      } else {
-        setCirclePattern(GREEN_COLOR);
-      }
-      Serial.println("상태: 감지 없음 (초록색)");
-    } 
-    else if (command == '1' || command == '2') {
-      // 감지됨 - 빨간색 (1 또는 2 명령 모두 빨간색으로 처리)
-      detectionLevel = 1;
-      if (USE_SMOOTH_TRANSITION) {
-        fadeToCirclePattern(RED_COLOR, TRANSITION_DURATION);
-      } else {
-        setCirclePattern(RED_COLOR);
-      }
-      Serial.println("상태: 감지됨 (빨간색)");
-    }
-  }
+  receiveSerialCommand();
   
   // 객체가 감지된 경우 (빨간색) 깜박임 효과 적용
   if (detectionLevel == 1) {
@@ -92,8 +76,83 @@ void loop() {
     }
   }
   
-  // 추가 로직이 필요한 경우 이곳에 작성
-  delay(10); // 짧은 지연 시간
+  // 주기적으로 핑 전송 (연결 상태 확인용)
+  static unsigned long lastPingTime = 0;
+  if (millis() - lastPingTime > 5000) { // 5초마다
+    lastPingTime = millis();
+    Serial.println("PING");
+  }
+  
+  // 시리얼 통신이 장시간 없을 경우 기본 상태(녹색)로 복귀
+  if (millis() - lastCommandTime > serialTimeout && detectionLevel != 0) {
+    detectionLevel = 0;
+    setCirclePattern(GREEN_COLOR);
+    Serial.println("시리얼 타임아웃: 기본 상태(녹색)로 복귀");
+  }
+  
+  // 짧은 지연 시간
+  delay(10);
+}
+
+// 시리얼 명령 수신 처리
+void receiveSerialCommand() {
+  String inputString = "";
+  
+  while (Serial.available() > 0) {
+    // 마지막 명령 시간 갱신
+    lastCommandTime = millis();
+    
+    // 한 문자씩 읽기
+    char inChar = (char)Serial.read();
+    
+    // 개행문자는 명령의 끝으로 처리
+    if (inChar == '\n' || inChar == '\r') {
+      if (inputString.length() > 0) {
+        processCommand(inputString.charAt(0));
+        inputString = "";
+      }
+    } else {
+      // 명령 문자열에 추가
+      inputString += inChar;
+    }
+    
+    // 버퍼에 남은 데이터가 없으면 즉시 처리
+    if (Serial.available() == 0 && inputString.length() > 0) {
+      processCommand(inputString.charAt(0));
+      inputString = "";
+    }
+  }
+}
+
+// 명령 처리
+void processCommand(char cmd) {
+  command = cmd;
+  
+  // 명령에 따라 LED 색상 변경
+  if (command == '0') {
+    // 감지 없음 - 초록색
+    detectionLevel = 0;
+    if (USE_SMOOTH_TRANSITION) {
+      fadeToCirclePattern(GREEN_COLOR, TRANSITION_DURATION);
+    } else {
+      setCirclePattern(GREEN_COLOR);
+    }
+    Serial.println("상태: 감지 없음 (초록색)");
+  } 
+  else if (command == '1' || command == '2') {
+    // 감지됨 - 빨간색 (1 또는 2 명령 모두 빨간색으로 처리)
+    detectionLevel = 1;
+    if (USE_SMOOTH_TRANSITION) {
+      fadeToCirclePattern(RED_COLOR, TRANSITION_DURATION);
+    } else {
+      setCirclePattern(RED_COLOR);
+    }
+    Serial.println("상태: 감지됨 (빨간색)");
+  }
+  
+  // 응답으로 현재 상태 전송
+  Serial.print("현재 상태: ");
+  Serial.println(detectionLevel);
 }
 
 // 모든 LED 지우기 (끄기)
