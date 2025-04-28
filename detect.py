@@ -189,7 +189,7 @@ def run(
                 im = im[None]  # expand for batch dim
             if webcam:
                 im0s = im0s[0]  # 첫 번째 웹캠 프레임만 사용
-                im0s = cv2.resize(im0s, (1280, 720))  # 웹캠 해상도를 1280x720으로 고정
+                im0s = cv2.resize(im0s, (640, 480))  # 웹캠 해상도를 640x480으로 낮춤 (성능 향상)
 
         # Inference
         with dt[1]:

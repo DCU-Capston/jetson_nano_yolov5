@@ -34,6 +34,19 @@ python detect.py --weights yolov5s.pt --source 0
 1. 가벼운 모델 사용 (yolov5s.pt 또는 yolov5n.pt)
 2. 이미지 크기 줄이기 (--img 320)
 3. 필요한 경우 `--half` 플래그 사용 (FP16 반정밀도)
+4. 최적화된 전력 설정 적용 (`jetson_optimize.py` 사용)
+5. 낮은 신뢰도 임계값 사용 (--conf 0.25)
+
+## 최적화된 실행 명령어
+
+```bash
+# 최적화된 설정으로 웹캠 실행
+python detect.py --weights yolov5n.pt --img 320 --conf 0.25 --source 0 --half
+
+# Jetson 전력 모드 최적화 후 실행
+python jetson_optimize.py --power max --model n --download
+python detect.py --weights yolov5n.pt --img 320 --conf 0.25 --source 0 --half
+```
 
 ## 포함된 파일
 

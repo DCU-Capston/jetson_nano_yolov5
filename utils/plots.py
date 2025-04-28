@@ -70,35 +70,22 @@ class Annotator:
                 self.draw.text((box[0], box[1] - h if outside else box[1]), label, fill=txt_color, font=self.font)
         else:  # cv2
             p1, p2 = (int(box[0]), int(box[1])), (int(box[2]), int(box[3]))
-            # 바운딩 박스 그리기 - 더 밝은 파란색으로 변경
-            box_color = (0, 65, 255)  # BGR 형식의 밝은 파란색
-            # 라인 두께 더 줄임
-            thickness = max(1, int(self.lw * 0.7))  
-            cv2.rectangle(self.im, p1, p2, box_color, thickness=thickness, lineType=cv2.LINE_AA)
+            # 공식 구현에 맞게 수정: 사용자 지정 색상 사용
+            thickness = max(self.lw - 1, 1)  # line thickness
+            cv2.rectangle(self.im, p1, p2, color, thickness=thickness, lineType=cv2.LINE_AA)
             if label:
-                # 텍스트 크기 계산
-                w, h = cv2.getTextSize(label, 0, fontScale=self.fs, thickness=1)[0]
-                # 텍스트 배경 색상 (파란색)
-                text_bg_color = (0, 65, 255)  # BGR 형식의 파란색
-                # 패딩 더 줄임
-                padding_v = 0  # 수직 패딩
-                padding_h = 0  # 수평 패딩
-                # 텍스트 배경 사각형 그리기
-                cv2.rectangle(self.im, 
-                             (p1[0], p1[1] - h - padding_v * 2), 
-                             (p1[0] + w + padding_h * 2, p1[1]), 
-                             text_bg_color, -1, cv2.LINE_AA)
-                # 텍스트 그리기 (흰색)
-                cv2.putText(
-                    self.im,
-                    label,
-                    (p1[0] + padding_h, p1[1] - padding_v - 1),  # 텍스트 위치 조정
-                    0,
-                    self.fs,
-                    (255, 255, 255),  # 흰색 텍스트
-                    thickness=1,
-                    lineType=cv2.LINE_AA,
-                )
+                tf = max(self.lw - 1, 1)  # font thickness
+                w, h = cv2.getTextSize(label, 0, fontScale=self.fs, thickness=tf)[0]  # text width, height
+                outside = p1[1] - h >= 3
+                p2 = p1[0] + w, p1[1] - h - 3 if outside else p1[1] + h + 3
+                cv2.rectangle(self.im, p1, p2, color, -1, cv2.LINE_AA)  # filled
+                cv2.putText(self.im,
+                           label, (p1[0], p1[1] - 2 if outside else p1[1] + h + 2),
+                           0,
+                           self.fs,
+                           txt_color,
+                           thickness=tf,
+                           lineType=cv2.LINE_AA)
 
     def masks(self, masks, colors, im_gpu=None, alpha=0.5):
         """Plot masks on image."""
