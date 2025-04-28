@@ -70,24 +70,25 @@ class Annotator:
                 self.draw.text((box[0], box[1] - h if outside else box[1]), label, fill=txt_color, font=self.font)
         else:  # cv2
             p1, p2 = (int(box[0]), int(box[1])), (int(box[2]), int(box[3]))
-            # 선 두께를 더 얇게 하고 직사각형 그리기
+            # 직사각형 테두리 색상 설정 (객체 클래스별 색상)
             cv2.rectangle(self.im, p1, p2, color, thickness=max(self.lw - 1, 1), lineType=cv2.LINE_AA)
             if label:
                 # 텍스트 크기 계산
                 w, h = cv2.getTextSize(label, 0, fontScale=self.fs, thickness=1)[0]
-                # 텍스트 위치 조정 - 항상 박스 위에 표시
+                # 텍스트 항상 박스 위에 표시
                 outside = True
-                # 텍스트 배경 생성
-                p2 = p1[0] + w + 2, p1[1] - h - 3 if outside else p1[1] + h + 3
-                cv2.rectangle(self.im, (p1[0], p1[1] - h - 2), p2, color, -1, cv2.LINE_AA)
-                # 텍스트 그리기
+                # 텍스트 배경 색상을 파란색으로 설정 (두 번째 이미지처럼)
+                text_bg_color = (0, 65, 255)  # BGR 형식의 파란색
+                # 텍스트 배경 사각형 그리기
+                cv2.rectangle(self.im, (p1[0], p1[1] - h - 2), (p1[0] + w + 2, p1[1]), text_bg_color, -1, cv2.LINE_AA)
+                # 텍스트 그리기 (흰색)
                 cv2.putText(
                     self.im,
                     label,
                     (p1[0], p1[1] - 2),
                     0,
                     self.fs,
-                    txt_color,
+                    (255, 255, 255),  # 항상 흰색 텍스트
                     thickness=1,
                     lineType=cv2.LINE_AA,
                 )
