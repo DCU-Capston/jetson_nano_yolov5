@@ -36,6 +36,7 @@ import sys
 from pathlib import Path
 
 import torch
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 FILE = Path(__file__).resolve()
 ROOT = FILE.parents[0]  # YOLOv5 root directory

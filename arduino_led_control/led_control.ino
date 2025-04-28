@@ -10,6 +10,7 @@
 // 효과 설정
 #define TRANSITION_DURATION 300  // 색상 전환 시간 (밀리초)
 #define USE_SMOOTH_TRANSITION true // 부드러운 색상 전환 효과 사용 여부
+#define CIRCLE_RADIUS 4    // 원형 패턴의 반지름
 
 // 상태 변수
 char command;
@@ -18,6 +19,7 @@ int detectionLevel = 0; // 0: 감지 없음(초록), 1: 감지됨(빨강)
 // 색상 정의
 uint32_t GREEN_COLOR;
 uint32_t RED_COLOR;
+uint32_t BLACK_COLOR;
 
 // NeoPixel 객체 초기화
 // NEO_GRB: WS2812B LED의 색상 순서 (Green-Red-Blue)
@@ -36,11 +38,12 @@ void setup() {
   // 색상 초기화
   GREEN_COLOR = strip.Color(0, 255, 0);   // RGB: 초록색
   RED_COLOR = strip.Color(255, 0, 0);     // RGB: 빨간색
+  BLACK_COLOR = strip.Color(0, 0, 0);     // RGB: 검정색 (꺼짐)
   
-  // 초기 LED 색상은 초록색으로 설정
-  setColor(GREEN_COLOR);
+  // 초기 LED 색상은 초록색 원형으로 설정
+  setCirclePattern(GREEN_COLOR);
   
-  Serial.println("WS2812B-64 LED 제어 시작");
+  Serial.println("WS2812B-64 LED 제어 시작 (원형 패턴)");
 }
 
 void loop() {
@@ -53,9 +56,9 @@ void loop() {
       // 감지 없음 - 초록색
       detectionLevel = 0;
       if (USE_SMOOTH_TRANSITION) {
-        fadeToColor(GREEN_COLOR, TRANSITION_DURATION);
+        fadeToCirclePattern(GREEN_COLOR, TRANSITION_DURATION);
       } else {
-        setColor(GREEN_COLOR);
+        setCirclePattern(GREEN_COLOR);
       }
       Serial.println("상태: 감지 없음 (초록색)");
     } 
@@ -63,19 +66,11 @@ void loop() {
       // 감지됨 - 빨간색 (1 또는 2 명령 모두 빨간색으로 처리)
       detectionLevel = 1;
       if (USE_SMOOTH_TRANSITION) {
-        fadeToColor(RED_COLOR, TRANSITION_DURATION);
+        fadeToCirclePattern(RED_COLOR, TRANSITION_DURATION);
       } else {
-        setColor(RED_COLOR);
+        setCirclePattern(RED_COLOR);
       }
       Serial.println("상태: 감지됨 (빨간색)");
-    }
-    else if (command == 'p') {
-      // 펄스 효과 - 현재 색상에 따라 펄스 효과 표시
-      if (detectionLevel == 0) {
-        pulseEffect(GREEN_COLOR, 3);
-      } else {
-        pulseEffect(RED_COLOR, 3);
-      }
     }
   }
   
@@ -90,9 +85,9 @@ void loop() {
       blinkState = !blinkState;
       
       if (blinkState) {
-        setColor(RED_COLOR);
+        setCirclePattern(RED_COLOR);
       } else {
-        setColor(strip.Color(0, 0, 0)); // 꺼짐
+        setCirclePattern(BLACK_COLOR); // 꺼짐
       }
     }
   }
@@ -101,30 +96,54 @@ void loop() {
   delay(10); // 짧은 지연 시간
 }
 
-// 모든 LED에 단일 색상 설정
-void setColor(uint32_t color) {
+// 모든 LED 지우기 (끄기)
+void clearAllLEDs() {
   for(int i=0; i<LED_COUNT; i++) {
-    strip.setPixelColor(i, color);
+    strip.setPixelColor(i, BLACK_COLOR);
   }
+  strip.show();
+}
+
+// 원형 패턴으로 LED 설정
+void setCirclePattern(uint32_t color) {
+  clearAllLEDs();
+  
+  // 8x8 매트릭스에서 중앙을 찾아 원형 패턴 생성
+  int centerX = 3; // 중앙 X 좌표 (0-7)
+  int centerY = 3; // 중앙 Y 좌표 (0-7)
+  
+  for(int y=0; y<8; y++) {
+    for(int x=0; x<8; x++) {
+      // 중앙으로부터의 거리 계산
+      float distance = sqrt(pow(x - centerX, 2) + pow(y - centerY, 2));
+      
+      // 원형 패턴 내에 있으면 해당 픽셀 켜기
+      if(distance <= CIRCLE_RADIUS) {
+        int pixelIndex = y * 8 + x;  // 8x8 매트릭스에서 픽셀 인덱스 계산
+        strip.setPixelColor(pixelIndex, color);
+      }
+    }
+  }
+  
   strip.show();
 }
 
 // 기본 색상 함수들
 void setGreen() {
-  setColor(GREEN_COLOR);
+  setCirclePattern(GREEN_COLOR);
 }
 
 void setRed() {
-  setColor(RED_COLOR);
+  setCirclePattern(RED_COLOR);
 }
 
-// 한 색상에서 다른 색상으로 부드럽게 전환
-void fadeToColor(uint32_t color, int duration) {
-  uint32_t oldColor = strip.getPixelColor(0); // 현재 색상 가져오기
+// 한 색상에서 다른 색상으로 부드럽게 전환 (원형 패턴)
+void fadeToCirclePattern(uint32_t color, int duration) {
+  uint32_t oldColor = strip.getPixelColor(27); // 중앙 부근 픽셀에서 현재 색상 가져오기
   
   // 현재 색상이 없으면 그냥 바로 설정
   if (oldColor == 0) {
-    setColor(color);
+    setCirclePattern(color);
     return;
   }
   
@@ -142,34 +161,10 @@ void fadeToColor(uint32_t color, int duration) {
     uint8_t g = oldG + (newG - oldG) * step / 20;
     uint8_t b = oldB + (newB - oldB) * step / 20;
     
-    setColor(strip.Color(r, g, b));
+    setCirclePattern(strip.Color(r, g, b));
     delay(duration / 20);
   }
   
   // 마지막에 정확한 색상으로 설정
-  setColor(color);
-}
-
-// 펄스 효과 - 색상이 부드럽게 밝아졌다 어두워짐
-void pulseEffect(uint32_t color, int count) {
-  uint8_t r = (color >> 16) & 0xFF;
-  uint8_t g = (color >> 8) & 0xFF;
-  uint8_t b = color & 0xFF;
-  
-  for (int j=0; j<count; j++) {
-    // 어두워짐
-    for (int k=100; k>=20; k-=5) {
-      setColor(strip.Color(r*k/100, g*k/100, b*k/100));
-      delay(30);
-    }
-    
-    // 밝아짐
-    for (int k=20; k<=100; k+=5) {
-      setColor(strip.Color(r*k/100, g*k/100, b*k/100));
-      delay(30);
-    }
-  }
-  
-  // 원래 색상으로 복원
-  setColor(color);
+  setCirclePattern(color);
 } 

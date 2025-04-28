@@ -74,22 +74,10 @@ class ArduinoController:
             command (str): 전송할 명령
                 '0': 녹색 LED (감지 없음)
                 '1': 빨간색 LED (감지됨)
-                'p': 펄스 효과
         """
         if not self.connected:
             print("아두이노에 연결되어 있지 않습니다.")
             return False
-        
-        # 펄스 효과의 경우 항상 전송
-        if command == 'p':
-            try:
-                self.serial_conn.write(command.encode())
-                print(f"아두이노에 명령 전송: {command} (펄스 효과)")
-                self._read_response()
-                return True
-            except Exception as e:
-                print(f"명령 전송 실패: {e}")
-                return False
         
         # 같은 명령이 연속적으로 발생하면 중복 전송하지 않음
         if command == self.last_command:
@@ -115,10 +103,6 @@ class ArduinoController:
     def set_red(self):
         """LED를 빨간색으로 설정 (감지됨)"""
         return self.send_command('1')
-    
-    def pulse_effect(self):
-        """현재 색상으로 펄스 효과 표시"""
-        return self.send_command('p')
 
 
 # 테스트 코드
@@ -147,20 +131,10 @@ if __name__ == "__main__":
         controller.set_green()
         time.sleep(2)
         
-        # 펄스 효과
-        print("초록색 펄스 효과")
-        controller.pulse_effect()
-        time.sleep(3)
-        
         # 빨간색 (감지됨)
         print("빨간색 LED")
         controller.set_red()
         time.sleep(2)
-        
-        # 펄스 효과
-        print("빨간색 펄스 효과")
-        controller.pulse_effect()
-        time.sleep(3)
         
         # 다시 초록색으로
         print("초록색 LED (테스트 종료)")
