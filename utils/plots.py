@@ -50,9 +50,9 @@ class Annotator:
             self.im = im
             self.lw = line_width or max(round(sum(im.shape) / 2 * 0.002), 1)  # 라인 두께
             self.tf = max(self.lw - 1, 1)  # font thickness
-            self.sf = 0.5  # 폰트 두께 감소 (1.0 → 0.5)
-            font_size = font_size or max(round(sum(im.shape) / 2 * 0.008), 7)  # 글자 크기 더 작게 조정 (0.018 → 0.008)
-            self.fs = max(font_size, 0.3)  # 글자 크기 최소값
+            self.sf = 0.3  # 폰트 두께 더 감소 (0.5 → 0.3)
+            font_size = font_size or max(round(sum(im.shape) / 2 * 0.004), 6)  # 글자 크기 더 작게 조정 (0.008 → 0.004)
+            self.fs = max(font_size, 0.25)  # 글자 크기 최소값 더 줄임 (0.3 → 0.25)
 
     def box_label(self, box, label="", color=(128, 128, 128), txt_color=(255, 255, 255)):
         """Add a box and label to the image."""
