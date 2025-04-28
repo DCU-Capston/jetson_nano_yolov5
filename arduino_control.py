@@ -8,7 +8,7 @@ import threading
 import sys
 
 class ArduinoController:
-    def __init__(self, port='/dev/ttyACM0', baudrate=9600, timeout=1, debug=True):
+    def __init__(self, port='/dev/ttyACM0', baudrate=9600, timeout=1, debug=False):
         """
         아두이노 컨트롤러 초기화
         
@@ -40,7 +40,7 @@ class ArduinoController:
         """디버그 메시지 출력"""
         if self.debug:
             timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
-            print(f"[{timestamp}] [아두이노 컨트롤러] {message}")
+            print(f"[{timestamp}] [아두이노] {message}")
     
     def connect(self):
         """아두이노에 연결 시도"""
@@ -58,13 +58,16 @@ class ArduinoController:
             time.sleep(2)  # 아두이노 리셋 후 안정화 대기
             self.connected = True
             self.reconnect_attempts = 0
-            print(f"아두이노에 연결되었습니다. 포트: {self.port}")
+            print(f"아두이노 연결됨: {self.port}")
             
             # 아두이노로부터 초기 응답 읽기
             self._read_initial_response()
             
             # 응답 수신 스레드 시작
             self._start_response_thread()
+            
+            # 상세 로깅 비활성화 명령 전송
+            self._set_verbose_logging(False)
             
         except serial.SerialException as e:
             self.connected = False
@@ -80,7 +83,22 @@ class ArduinoController:
         if self.connected and self.serial_conn:
             self.serial_conn.close()
             self.connected = False
-            print("아두이노 연결이 종료되었습니다.")
+            self.debug_print("연결 종료됨")
+    
+    def _set_verbose_logging(self, enabled=False):
+        """아두이노 측 로깅 설정"""
+        if not self.connected:
+            return False
+            
+        try:
+            cmd = 'v\n' if enabled else 'v\n'
+            self.serial_conn.write(cmd.encode())
+            self.serial_conn.flush()
+            self.debug_print(f"로깅 설정: {'활성화' if enabled else '비활성화'}")
+            return True
+        except Exception as e:
+            self.debug_print(f"로깅 설정 실패: {e}")
+            return False
     
     def _start_response_thread(self):
         """응답 수신을 위한 스레드 시작"""
@@ -90,7 +108,7 @@ class ArduinoController:
         self.thread_running = True
         self.response_thread = threading.Thread(target=self._response_reader, daemon=True)
         self.response_thread.start()
-        self.debug_print("응답 수신 스레드가 시작되었습니다.")
+        self.debug_print("응답 수신 스레드 시작됨")
     
     def _response_reader(self):
         """지속적으로 아두이노 응답을 읽는 스레드 함수"""
@@ -99,7 +117,11 @@ class ArduinoController:
                 if self.serial_conn and self.serial_conn.is_open and self.serial_conn.in_waiting > 0:
                     response = self.serial_conn.readline().decode('utf-8', errors='replace').strip()
                     if response:
-                        print(f"아두이노 응답: {response}")
+                        # 최소한의 응답만 출력 (상태 정보만)
+                        if response.startswith("S:"):
+                            self.debug_print(f"상태: {'감지됨' if response == 'S:1' else '감지 없음'}")
+                        elif self.debug:
+                            print(f"아두이노 응답: {response}")
                         self.last_response_time = time.time()
                 time.sleep(0.1)  # CPU 부하 줄이기
             except Exception as e:
@@ -121,13 +143,13 @@ class ArduinoController:
                 if self.serial_conn.in_waiting > 0:
                     response = self.serial_conn.readline().decode('utf-8', errors='replace').strip()
                     if response:
-                        print(f"아두이노 응답: {response}")
+                        self.debug_print(f"초기 응답: {response}")
                         responses.append(response)
                         self.last_response_time = time.time()
                 else:
                     time.sleep(0.1)
             except Exception as e:
-                print(f"초기 응답 읽기 실패: {e}")
+                self.debug_print(f"초기 응답 읽기 실패: {e}")
                 break
         
         return responses
@@ -144,22 +166,22 @@ class ArduinoController:
             
             # 마지막 응답 시간 확인 (60초 이상 응답 없으면 연결 끊김으로 간주)
             if time.time() - self.last_response_time > 60 and self.last_response_time > 0:
-                self.debug_print("60초 이상 응답이 없어 연결이 끊긴 것으로 간주합니다.")
+                self.debug_print("60초 이상 응답 없음, 연결 끊김으로 간주")
                 self.connected = False
             
             return True
         except Exception:
             self.connected = False
-            self.debug_print("아두이노 연결이 끊어졌습니다. 재연결을 시도합니다.")
+            self.debug_print("연결 끊김, 재연결 시도")
             
             # 재연결 시도
             if self.reconnect_attempts < self.max_reconnect_attempts:
                 self.reconnect_attempts += 1
-                print(f"재연결 시도 ({self.reconnect_attempts}/{self.max_reconnect_attempts})...")
+                self.debug_print(f"재연결 시도 ({self.reconnect_attempts}/{self.max_reconnect_attempts})")
                 time.sleep(1)
                 self.connect()
             else:
-                print(f"최대 재연결 시도 횟수({self.max_reconnect_attempts})를 초과했습니다.")
+                self.debug_print(f"최대 재시도 횟수 초과 ({self.max_reconnect_attempts})")
             
             return self.connected
     
@@ -174,9 +196,13 @@ class ArduinoController:
         """
         if not self.connected:
             if not self._check_connection():
-                print("아두이노에 연결되어 있지 않습니다.")
+                self.debug_print("연결되지 않음")
                 return False
         
+        # 같은 명령이 연속으로 전송되면 무시
+        if command == self.last_command:
+            return True
+            
         # 명령 재전송 시도를 위한 변수
         max_retries = 3
         retry_count = 0
@@ -185,7 +211,7 @@ class ArduinoController:
             try:
                 # 명령에 개행문자 추가하여 아두이노가 확실히 인식하도록 함
                 cmd_str = command + '\n'
-                self.debug_print(f"명령 전송 시도: '{command}' (시도 {retry_count+1}/{max_retries})")
+                self.debug_print(f"명령 전송: '{command}' (시도 {retry_count+1})")
                 
                 # 버퍼 비우기
                 self.serial_conn.reset_input_buffer()
@@ -196,25 +222,28 @@ class ArduinoController:
                 self.serial_conn.flush()  # 버퍼 내용 즉시 전송
                 
                 self.last_command = command
-                print(f"아두이노에 명령 전송: {command} ({bytes_written} 바이트)")
+                if command == '0':
+                    print("감지 없음: 초록색 설정")
+                elif command == '1':
+                    print("객체 감지: 빨간색 설정")
                 
                 # 응답 대기
-                time.sleep(0.5)
+                time.sleep(0.2)
                 
                 # 명령 성공으로 간주
                 return True
                 
             except Exception as e:
-                print(f"명령 전송 실패: {e}")
+                self.debug_print(f"명령 전송 실패: {e}")
                 retry_count += 1
                 
                 # 마지막 시도가 아니면 재연결 시도
                 if retry_count < max_retries:
-                    print(f"재시도 중... ({retry_count}/{max_retries})")
+                    self.debug_print(f"재시도 중... ({retry_count})")
                     self._check_connection()
                     time.sleep(1)
                 else:
-                    print("최대 재시도 횟수를 초과했습니다.")
+                    self.debug_print("최대 재시도 횟수 초과")
                     return False
     
     def set_green(self):
@@ -246,23 +275,25 @@ if __name__ == "__main__":
         sys.exit(1)
     
     try:
-        print("WS2812B-64 LED 색상 변경 테스트 시작...")
+        print("LED 제어 테스트 시작...")
         
         # 초록색 (감지 없음)
-        print("초록색 LED")
+        print("초록색 LED 설정 중...")
         controller.set_green()
         time.sleep(3)
         
         # 빨간색 (감지됨)
-        print("빨간색 LED")
+        print("빨간색 LED 설정 중...")
         controller.set_red()
         time.sleep(3)
         
         # 다시 초록색으로
-        print("초록색 LED (테스트 종료)")
+        print("초록색 LED 설정 중...")
         controller.set_green()
         
+        print("테스트 완료")
+        
     except KeyboardInterrupt:
-        print("테스트가 중단되었습니다.")
+        print("테스트 중단됨")
     finally:
         controller.disconnect() 

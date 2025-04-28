@@ -21,6 +21,7 @@ int detectionLevel = 0; // 0: 감지 없음(초록), 1: 감지됨(빨강)
 unsigned long lastCommandTime = 0;
 unsigned long serialTimeout = 5000; // 시리얼 타임아웃(밀리초)
 boolean isBlinking = false;  // 깜박임 상태
+boolean verboseLogging = false; // 상세 로그 출력 여부
 
 // 색상 정의
 uint32_t GREEN_COLOR;
@@ -61,11 +62,8 @@ void setup() {
     delay(200);
   }
   
-  // 초기화 메시지 전송
-  Serial.println("WS2812B-64 LED 제어 시작 (원형 패턴)");
-  Serial.println("아두이노 준비 완료");
-  // 핑 메시지 전송 (연결 확인용)
-  Serial.println("PING");
+  // 최소한의 초기화 메시지만 전송
+  Serial.println("준비 완료");
 }
 
 void loop() {
@@ -92,15 +90,20 @@ void loop() {
     }
   }
   
-  // 주기적으로 핑 전송 (연결 상태 확인용)
+  // 주기적으로 핑 전송 (연결 상태 확인용) - 로그 감소를 위해 비활성화
   static unsigned long lastPingTime = 0;
-  if (millis() - lastPingTime > 5000) { // 5초마다
+  if (millis() - lastPingTime > 30000) { // 30초마다로 변경
     lastPingTime = millis();
-    Serial.println("PING");
+    
     // 내장 LED로 심박 표시
     digitalWrite(BUILTIN_LED_PIN, HIGH);
     delay(20);
     digitalWrite(BUILTIN_LED_PIN, LOW);
+    
+    // 필수 핑 메시지만 유지
+    if (verboseLogging) {
+      Serial.println("PING");
+    }
   }
   
   // 시리얼 통신이 장시간 없을 경우 기본 상태(녹색)로 복귀
@@ -108,7 +111,10 @@ void loop() {
     detectionLevel = 0;
     isBlinking = false;
     setCirclePattern(GREEN_COLOR);
-    Serial.println("시리얼 타임아웃: 기본 상태(녹색)로 복귀");
+    
+    if (verboseLogging) {
+      Serial.println("시리얼 타임아웃: 기본 상태(녹색)로 복귀");
+    }
   }
   
   // 짧은 지연 시간
@@ -132,8 +138,10 @@ void receiveSerialCommand() {
     // 개행문자는 명령의 끝으로 처리
     if (inChar == '\n' || inChar == '\r') {
       if (inputString.length() > 0) {
-        Serial.print("명령 수신: ");
-        Serial.println(inputString);
+        if (verboseLogging) {
+          Serial.print("명령 수신: ");
+          Serial.println(inputString);
+        }
         processCommand(inputString.charAt(0));
         inputString = "";
       }
@@ -144,8 +152,10 @@ void receiveSerialCommand() {
     
     // 버퍼에 남은 데이터가 없으면 즉시 처리
     if (Serial.available() == 0 && inputString.length() > 0) {
-      Serial.print("명령 즉시 처리: ");
-      Serial.println(inputString);
+      if (verboseLogging) {
+        Serial.print("명령 즉시 처리: ");
+        Serial.println(inputString);
+      }
       processCommand(inputString.charAt(0));
       inputString = "";
     }
@@ -158,8 +168,20 @@ void receiveSerialCommand() {
 // 명령 처리
 void processCommand(char cmd) {
   command = cmd;
-  Serial.print("처리 중인 명령: ");
-  Serial.println(command);
+  
+  // 특수 명령 처리
+  if (cmd == 'v') {
+    // 상세 로깅 토글
+    verboseLogging = !verboseLogging;
+    Serial.print("상세 로그: ");
+    Serial.println(verboseLogging ? "활성화" : "비활성화");
+    return;
+  }
+  
+  if (verboseLogging) {
+    Serial.print("처리 중인 명령: ");
+    Serial.println(command);
+  }
   
   // 명령에 따라 LED 색상 변경
   if (command == '0') {
@@ -171,7 +193,10 @@ void processCommand(char cmd) {
     } else {
       setCirclePattern(GREEN_COLOR);
     }
-    Serial.println("상태: 감지 없음 (초록색)");
+    
+    if (verboseLogging) {
+      Serial.println("상태: 감지 없음 (초록색)");
+    }
   } 
   else if (command == '1' || command == '2') {
     // 감지됨 - 빨간색 (1 또는 2 명령 모두 빨간색으로 처리)
@@ -182,11 +207,14 @@ void processCommand(char cmd) {
     } else {
       setCirclePattern(RED_COLOR);
     }
-    Serial.println("상태: 감지됨 (빨간색)");
+    
+    if (verboseLogging) {
+      Serial.println("상태: 감지됨 (빨간색)");
+    }
   }
   
-  // 응답으로 현재 상태 전송
-  Serial.print("현재 상태: ");
+  // 응답으로 현재 상태 전송 (최소한의 응답)
+  Serial.print("S:");
   Serial.println(detectionLevel);
 }
 
@@ -221,17 +249,19 @@ void setCirclePattern(uint32_t color) {
   
   strip.show();
   
-  // 상태 변경 확인용 메시지
-  if (color == GREEN_COLOR) {
-    Serial.println("LED 패턴 설정: 초록색 원형");
-  } else if (color == RED_COLOR) {
-    Serial.println("LED 패턴 설정: 빨간색 원형");
-  } else if (color == BLACK_COLOR) {
-    Serial.println("LED 패턴 설정: 꺼짐");
-  } else {
-    Serial.print("LED 패턴 설정: 사용자 정의 색상(0x");
-    Serial.print(color, HEX);
-    Serial.println(")");
+  // 상세 로깅 모드에서만 출력
+  if (verboseLogging) {
+    if (color == GREEN_COLOR) {
+      Serial.println("LED 패턴 설정: 초록색 원형");
+    } else if (color == RED_COLOR) {
+      Serial.println("LED 패턴 설정: 빨간색 원형");
+    } else if (color == BLACK_COLOR) {
+      Serial.println("LED 패턴 설정: 꺼짐");
+    } else {
+      Serial.print("LED 패턴 설정: 사용자 정의 색상(0x");
+      Serial.print(color, HEX);
+      Serial.println(")");
+    }
   }
 }
 
@@ -262,7 +292,9 @@ void fadeToCirclePattern(uint32_t color, int duration) {
   uint8_t newG = (color >> 8) & 0xFF;
   uint8_t newB = color & 0xFF;
   
-  Serial.println("색상 페이드 시작");
+  if (verboseLogging) {
+    Serial.println("색상 페이드 시작");
+  }
   
   // 점진적으로 색상 변경
   for(int step=0; step<=20; step++) {
@@ -276,5 +308,8 @@ void fadeToCirclePattern(uint32_t color, int duration) {
   
   // 마지막에 정확한 색상으로 설정
   setCirclePattern(color);
-  Serial.println("색상 페이드 완료");
+  
+  if (verboseLogging) {
+    Serial.println("색상 페이드 완료");
+  }
 } 
