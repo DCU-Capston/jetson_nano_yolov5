@@ -427,7 +427,7 @@ def main(opt):
         main(opt)
     ```
     """
-    check_requirements(ROOT / "requirements.txt", exclude=("tensorboard", "thop"))
+    check_requirements(exclude=("tensorboard", "thop"))  # check requirements
     run(**vars(opt))
 
 
