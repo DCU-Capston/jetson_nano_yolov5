@@ -55,3 +55,6 @@ python detect.py --weights yolov5n.pt --img 320 --conf 0.25 --source 0 --half
 -   models/: 모델 아키텍처 및 가중치 파일
 -   utils/: 유틸리티 함수들
 -   data/: 데이터셋 구성 파일
+
+## arduino 권한
+sudo usermod -a -G dialout $USER
