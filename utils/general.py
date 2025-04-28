@@ -34,17 +34,6 @@ import torch
 import torchvision
 import yaml
 
-# Import 'ultralytics' package or install if missing
-try:
-    import ultralytics
-
-    assert hasattr(ultralytics, "__version__")  # verify package is not directory
-except (ImportError, AssertionError):
-    os.system("pip install -U ultralytics")
-    import ultralytics
-
-from ultralytics.utils.checks import check_requirements
-
 from utils import TryExcept, emojis
 from utils.downloads import curl_download, gsutil_getsize
 from utils.metrics import box_iou, fitness
@@ -1292,3 +1281,41 @@ if Path(inspect.stack()[0].filename).parent.parent.as_posix() in inspect.stack()
     cv2.imread, cv2.imwrite, cv2.imshow = imread, imwrite, imshow  # redefine
 
 # Variables ------------------------------------------------------------------------------------------------------------
+
+def check_requirements(requirements=[], exclude=(), install=True, cmds=''):
+    """
+    Check if installed dependencies meet YOLOv5 requirements and install missing dependencies.
+    
+    Args:
+        requirements: List of required packages or a single package string
+        exclude: Packages to exclude
+        install: If True, attempt to install requirements
+        cmds: Additional commands
+        
+    Returns:
+        True if all requirements are satisfied, False otherwise
+    """
+    if isinstance(requirements, str):
+        requirements = [requirements]
+    if not requirements:
+        return True
+
+    s = ''
+    for r in requirements:
+        try:
+            pkg.require(r)
+        except Exception as e:  # DistributionNotFound or VersionConflict
+            s += f'"{r}" '
+            if install:
+                LOGGER.warning(f'⚠️ {r} not found, attempting installation...')
+                try:
+                    if cmds:
+                        os.system(cmds)
+                    else:
+                        os.system(f'pip install {r}')
+                except Exception as e:
+                    LOGGER.warning(f'❌ {e}')
+    
+    if s and install:
+        LOGGER.info(f'⚠️ Some required packages were missing and have been installed: {s}')
+    return not bool(s)

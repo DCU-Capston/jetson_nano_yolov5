@@ -1,4 +1,4 @@
-# Ultralytics 🚀 AGPL-3.0 License - https://ultralytics.com/license
+# YOLOv5 🚀 AGPL-3.0 License
 """
 Run YOLOv5 detection inference on images, videos, directories, globs, YouTube, webcam, streams, etc.
 
@@ -139,8 +139,6 @@ def run(
 
     Examples:
         ```python
-        from ultralytics import run
-
         # Run inference on an image
         run(source='data/images/example.jpg', weights='yolov5s.pt', device='0')
 
