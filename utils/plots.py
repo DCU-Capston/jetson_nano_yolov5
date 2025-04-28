@@ -48,11 +48,11 @@ class Annotator:
                 self.font = ImageFont.load_default()
         else:  # use cv2
             self.im = im
-            self.lw = line_width or max(round(sum(im.shape) / 2 * 0.002), 1)  # 라인 두께 더 줄임
+            self.lw = line_width or max(round(sum(im.shape) / 2 * 0.002), 1)  # 라인 두께
             self.tf = max(self.lw - 1, 1)  # font thickness
-            self.sf = 1  # 폰트 두께 고정
-            font_size = font_size or max(round(sum(im.shape) / 2 * 0.018), 8)  # 글자 크기 더 줄임
-            self.fs = max(font_size, 0.3)  # 글자 크기 최소값 더 줄임
+            self.sf = 0.5  # 폰트 두께 감소 (1.0 → 0.5)
+            font_size = font_size or max(round(sum(im.shape) / 2 * 0.008), 7)  # 글자 크기 더 작게 조정 (0.018 → 0.008)
+            self.fs = max(font_size, 0.3)  # 글자 크기 최소값
 
     def box_label(self, box, label="", color=(128, 128, 128), txt_color=(255, 255, 255)):
         """Add a box and label to the image."""
@@ -70,11 +70,11 @@ class Annotator:
                 self.draw.text((box[0], box[1] - h if outside else box[1]), label, fill=txt_color, font=self.font)
         else:  # cv2
             p1, p2 = (int(box[0]), int(box[1])), (int(box[2]), int(box[3]))
-            # 공식 구현에 맞게 수정: 사용자 지정 색상 사용
+            # 박스 라인 두께 설정
             thickness = max(self.lw - 1, 1)  # line thickness
             cv2.rectangle(self.im, p1, p2, color, thickness=thickness, lineType=cv2.LINE_AA)
             if label:
-                tf = max(self.lw - 1, 1)  # font thickness
+                tf = max(self.tf, 1)  # font thickness (최소 1)
                 w, h = cv2.getTextSize(label, 0, fontScale=self.fs, thickness=tf)[0]  # text width, height
                 outside = p1[1] - h >= 3
                 p2 = p1[0] + w, p1[1] - h - 3 if outside else p1[1] + h + 3
