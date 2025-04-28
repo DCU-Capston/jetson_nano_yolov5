@@ -51,8 +51,8 @@ class Annotator:
             self.lw = line_width or max(round(sum(im.shape) / 2 * 0.003), 2)  # line width
             self.tf = max(self.lw - 1, 1)  # font thickness
             self.sf = self.tf  # font thickness
-            font_size = font_size or max(round(sum(im.shape) / 2 * 0.035), 12)
-            self.fs = max(font_size, 1)  # font size
+            font_size = font_size or max(round(sum(im.shape) / 2 * 0.025), 10)  # 글자 크기 줄임
+            self.fs = max(font_size, 0.5)  # 글자 크기 최소값 줄임
 
     def box_label(self, box, label="", color=(128, 128, 128), txt_color=(255, 255, 255)):
         """Add a box and label to the image."""
@@ -80,13 +80,18 @@ class Annotator:
                 text_bg_color = (255, 0, 0)  # BGR 형식의 파란색
                 # 텍스트 위치 - 박스 왼쪽 상단에 배치
                 text_pt = (p1[0], p1[1] - 2)
-                # 텍스트 배경 사각형 그리기
-                cv2.rectangle(self.im, (p1[0], p1[1] - h - 2), (p1[0] + w + 2, p1[1]), text_bg_color, -1, cv2.LINE_AA)
+                # 텍스트 배경 사각형 그리기 (패딩 줄임)
+                padding_v = 1  # 수직 패딩
+                padding_h = 1  # 수평 패딩
+                cv2.rectangle(self.im, 
+                             (p1[0], p1[1] - h - padding_v * 2), 
+                             (p1[0] + w + padding_h * 2, p1[1]), 
+                             text_bg_color, -1, cv2.LINE_AA)
                 # 텍스트 그리기 (흰색)
                 cv2.putText(
                     self.im,
                     label,
-                    text_pt,
+                    (p1[0] + padding_h, p1[1] - padding_v - 1),  # 텍스트 위치 조정
                     0,
                     self.fs,
                     (255, 255, 255),  # 흰색 텍스트
