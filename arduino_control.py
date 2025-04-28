@@ -73,8 +73,7 @@ class ArduinoController:
         Args:
             command (str): 전송할 명령
                 '0': 녹색 LED (감지 없음)
-                '1': 주황색 LED (감지됨)
-                '2': 빨간색 LED (위험)
+                '1': 빨간색 LED (감지됨)
                 'p': 펄스 효과
         """
         if not self.connected:
@@ -113,13 +112,9 @@ class ArduinoController:
         """LED를 녹색으로 설정 (감지 없음)"""
         return self.send_command('0')
     
-    def set_orange(self):
-        """LED를 주황색으로 설정 (감지됨)"""
-        return self.send_command('1')
-    
     def set_red(self):
-        """LED를 빨간색으로 설정 (위험)"""
-        return self.send_command('2')
+        """LED를 빨간색으로 설정 (감지됨)"""
+        return self.send_command('1')
     
     def pulse_effect(self):
         """현재 색상으로 펄스 효과 표시"""
@@ -157,17 +152,7 @@ if __name__ == "__main__":
         controller.pulse_effect()
         time.sleep(3)
         
-        # 주황색 (감지됨)
-        print("주황색 LED")
-        controller.set_orange()
-        time.sleep(2)
-        
-        # 펄스 효과
-        print("주황색 펄스 효과")
-        controller.pulse_effect()
-        time.sleep(3)
-        
-        # 빨간색 (위험)
+        # 빨간색 (감지됨)
         print("빨간색 LED")
         controller.set_red()
         time.sleep(2)

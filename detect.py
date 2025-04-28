@@ -108,7 +108,6 @@ def run(
     use_arduino=False,  # 아두이노 LED 제어 사용 여부
     target_classes=None,  # LED 상태를 변경할 대상 클래스(들)
     detection_threshold=1,  # 감지 임계값 (이 값 이상의 객체가 감지되면 경고)
-    warning_threshold=3,  # 경고 임계값 (이 값 이상의 객체가 감지되면 위험)
 ):
     """
     Runs YOLOv5 detection inference on various sources like images, videos, directories, streams, etc.
@@ -148,20 +147,7 @@ def run(
         arduino_port (str): 아두이노 시리얼 포트 경로. 기본값은 '/dev/ttyACM0'.
         use_arduino (bool): 아두이노 LED 제어 사용 여부. 기본값은 False.
         target_classes (list): LED 상태를 변경할 대상 클래스(들). 기본값은 None (모든 클래스).
-        detection_threshold (int): 감지 임계값 (이 값 이상의 객체가 감지되면 경고). 기본값은 1.
-        warning_threshold (int): 경고 임계값 (이 값 이상의 객체가 감지되면 위험). 기본값은 3.
-
-    Returns:
-        None
-
-    Examples:
-        ```python
-        # Run inference on an image
-        run(source='data/images/example.jpg', weights='yolov5s.pt', device='0')
-
-        # Run inference on a video with specific confidence threshold
-        run(source='data/videos/example.mp4', weights='yolov5s.pt', conf_thres=0.4, device='0')
-        ```
+        detection_threshold (int): 감지 임계값 (이 값 이상의 객체가 감지되면 빨간색). 기본값은 1.
     """
     source = str(source)
     save_img = not nosave and not source.endswith(".txt")  # save inference images
@@ -276,7 +262,7 @@ def run(
                         # 감지된 객체 없음 - 초록색
                         arduino.set_green()
                     else:
-                        # 객체가 감지됨 - 빨간색 (항상 빨간색으로 점등)
+                        # 객체가 감지됨 - 빨간색
                         arduino.set_red()
                 
                 # 화면에 감지 정보 추가
@@ -286,7 +272,7 @@ def run(
                     (10, 30), 
                     cv2.FONT_HERSHEY_SIMPLEX, 
                     1, 
-                    (0, 255, 0) if target_count == 0 else (0, 0, 255),  # 감지되면 항상 빨간색
+                    (0, 255, 0) if target_count == 0 else (0, 0, 255),  # 감지 없음: 초록색, 감지됨: 빨간색
                     2
                 )
 
@@ -390,8 +376,7 @@ def parse_opt():
     parser.add_argument("--arduino-port", type=str, default="/dev/ttyACM0", help="아두이노 시리얼 포트")
     parser.add_argument("--use-arduino", action="store_true", help="아두이노 LED 제어 사용")
     parser.add_argument("--target-classes", type=int, nargs="+", default=None, help="LED 상태를 변경할 대상 클래스(들)")
-    parser.add_argument("--detection-threshold", type=int, default=1, help="감지 임계값 (이 값 이상의 객체가 감지되면 경고)")
-    parser.add_argument("--warning-threshold", type=int, default=3, help="경고 임계값 (이 값 이상의 객체가 감지되면 위험)")
+    parser.add_argument("--detection-threshold", type=int, default=1, help="감지 임계값 (이 값 이상의 객체가 감지되면 빨간색)")
     
     opt = parser.parse_args()
     opt.imgsz *= 2 if len(opt.imgsz) == 1 else 1  # expand

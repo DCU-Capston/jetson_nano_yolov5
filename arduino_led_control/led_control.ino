@@ -13,11 +13,10 @@
 
 // 상태 변수
 char command;
-int detectionLevel = 0; // 0: 감지 없음(초록), 1: 감지(주황), 2: 위험(빨강)
+int detectionLevel = 0; // 0: 감지 없음(초록), 1: 감지됨(빨강)
 
 // 색상 정의
 uint32_t GREEN_COLOR;
-uint32_t ORANGE_COLOR;
 uint32_t RED_COLOR;
 
 // NeoPixel 객체 초기화
@@ -36,7 +35,6 @@ void setup() {
   
   // 색상 초기화
   GREEN_COLOR = strip.Color(0, 255, 0);   // RGB: 초록색
-  ORANGE_COLOR = strip.Color(255, 165, 0); // RGB: 주황색
   RED_COLOR = strip.Color(255, 0, 0);     // RGB: 빨간색
   
   // 초기 LED 색상은 초록색으로 설정
@@ -61,40 +59,28 @@ void loop() {
       }
       Serial.println("상태: 감지 없음 (초록색)");
     } 
-    else if (command == '1') {
-      // 감지됨 - 주황색
+    else if (command == '1' || command == '2') {
+      // 감지됨 - 빨간색 (1 또는 2 명령 모두 빨간색으로 처리)
       detectionLevel = 1;
-      if (USE_SMOOTH_TRANSITION) {
-        fadeToColor(ORANGE_COLOR, TRANSITION_DURATION);
-      } else {
-        setColor(ORANGE_COLOR);
-      }
-      Serial.println("상태: 감지됨 (주황색)");
-    } 
-    else if (command == '2') {
-      // 위험 - 빨간색
-      detectionLevel = 2;
       if (USE_SMOOTH_TRANSITION) {
         fadeToColor(RED_COLOR, TRANSITION_DURATION);
       } else {
         setColor(RED_COLOR);
       }
-      Serial.println("상태: 위험 (빨간색)");
+      Serial.println("상태: 감지됨 (빨간색)");
     }
     else if (command == 'p') {
       // 펄스 효과 - 현재 색상에 따라 펄스 효과 표시
       if (detectionLevel == 0) {
         pulseEffect(GREEN_COLOR, 3);
-      } else if (detectionLevel == 1) {
-        pulseEffect(ORANGE_COLOR, 3);
       } else {
         pulseEffect(RED_COLOR, 3);
       }
     }
   }
   
-  // 위험 수준이 2(빨간색)인 경우 깜박임 효과 적용
-  if (detectionLevel == 2) {
+  // 객체가 감지된 경우 (빨간색) 깜박임 효과 적용
+  if (detectionLevel == 1) {
     static unsigned long lastBlinkTime = 0;
     static boolean blinkState = true;
     
@@ -126,10 +112,6 @@ void setColor(uint32_t color) {
 // 기본 색상 함수들
 void setGreen() {
   setColor(GREEN_COLOR);
-}
-
-void setOrange() {
-  setColor(ORANGE_COLOR);
 }
 
 void setRed() {
