@@ -48,11 +48,11 @@ class Annotator:
                 self.font = ImageFont.load_default()
         else:  # use cv2
             self.im = im
-            self.lw = line_width or max(round(sum(im.shape) / 2 * 0.0015), 1)  # 라인 두께 축소
-            self.tf = max(int(self.lw * 0.5), 1)  # font thickness 더 얇게
-            self.sf = 0.07  # 폰트 두께 극소화 (0.1 → 0.07)
-            font_size = font_size or max(round(sum(im.shape) / 2 * 0.0008), 2)  # 글자 크기 극소화 (0.001 → 0.0008)
-            self.fs = max(font_size, 0.08)  # 글자 크기 최소값 극소화 (0.1 → 0.08)
+            self.lw = line_width or max(round(sum(im.shape) / 2 * 0.001), 1)  # 라인 두께 최소화
+            self.tf = 1  # font thickness 고정 최소값
+            self.sf = 0.05  # 폰트 두께 극한으로 축소 (0.07 → 0.05)
+            font_size = font_size or max(round(sum(im.shape) / 2 * 0.0005), 1)  # 글자 크기 극한으로 축소 (0.0008 → 0.0005)
+            self.fs = max(font_size, 0.05)  # 글자 크기 최소값 극한으로 축소 (0.08 → 0.05)
 
     def box_label(self, box, label="", color=(128, 128, 128), txt_color=(255, 255, 255)):
         """Add a box and label to the image."""
