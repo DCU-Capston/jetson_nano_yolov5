@@ -48,11 +48,11 @@ class Annotator:
                 self.font = ImageFont.load_default()
         else:  # use cv2
             self.im = im
-            self.lw = line_width or max(round(sum(im.shape) / 2 * 0.003), 2)  # line width
+            self.lw = line_width or max(round(sum(im.shape) / 2 * 0.002), 1)  # 라인 두께 더 줄임
             self.tf = max(self.lw - 1, 1)  # font thickness
-            self.sf = self.tf  # font thickness
-            font_size = font_size or max(round(sum(im.shape) / 2 * 0.025), 10)  # 글자 크기 줄임
-            self.fs = max(font_size, 0.5)  # 글자 크기 최소값 줄임
+            self.sf = 1  # 폰트 두께 고정
+            font_size = font_size or max(round(sum(im.shape) / 2 * 0.018), 8)  # 글자 크기 더 줄임
+            self.fs = max(font_size, 0.3)  # 글자 크기 최소값 더 줄임
 
     def box_label(self, box, label="", color=(128, 128, 128), txt_color=(255, 255, 255)):
         """Add a box and label to the image."""
@@ -70,19 +70,20 @@ class Annotator:
                 self.draw.text((box[0], box[1] - h if outside else box[1]), label, fill=txt_color, font=self.font)
         else:  # cv2
             p1, p2 = (int(box[0]), int(box[1])), (int(box[2]), int(box[3]))
-            # 바운딩 박스 그리기 - 파란색으로 변경
-            box_color = (255, 0, 0)  # 파란색 (BGR)
-            cv2.rectangle(self.im, p1, p2, box_color, thickness=max(self.lw - 1, 1), lineType=cv2.LINE_AA)
+            # 바운딩 박스 그리기 - 더 밝은 파란색으로 변경
+            box_color = (0, 65, 255)  # BGR 형식의 밝은 파란색
+            # 라인 두께 더 줄임
+            thickness = max(1, int(self.lw * 0.7))  
+            cv2.rectangle(self.im, p1, p2, box_color, thickness=thickness, lineType=cv2.LINE_AA)
             if label:
                 # 텍스트 크기 계산
                 w, h = cv2.getTextSize(label, 0, fontScale=self.fs, thickness=1)[0]
                 # 텍스트 배경 색상 (파란색)
-                text_bg_color = (255, 0, 0)  # BGR 형식의 파란색
-                # 텍스트 위치 - 박스 왼쪽 상단에 배치
-                text_pt = (p1[0], p1[1] - 2)
-                # 텍스트 배경 사각형 그리기 (패딩 줄임)
-                padding_v = 1  # 수직 패딩
-                padding_h = 1  # 수평 패딩
+                text_bg_color = (0, 65, 255)  # BGR 형식의 파란색
+                # 패딩 더 줄임
+                padding_v = 0  # 수직 패딩
+                padding_h = 0  # 수평 패딩
+                # 텍스트 배경 사각형 그리기
                 cv2.rectangle(self.im, 
                              (p1[0], p1[1] - h - padding_v * 2), 
                              (p1[0] + w + padding_h * 2, p1[1]), 
