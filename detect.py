@@ -65,6 +65,13 @@ from utils.general import (
 )
 from utils.torch_utils import select_device, smart_inference_mode
 
+# 아두이노 제어 모듈 임포트
+try:
+    from arduino_control import ArduinoController
+except ImportError:
+    LOGGER.info("아두이노 제어 모듈을 찾을 수 없습니다. arduino_control.py 파일이 경로에 있는지 확인하세요.")
+    ArduinoController = None
+
 
 @smart_inference_mode()
 def run(
@@ -97,6 +104,11 @@ def run(
     half=False,  # use FP16 half-precision inference
     dnn=False,  # use OpenCV DNN for ONNX inference
     vid_stride=1,  # video frame-rate stride
+    arduino_port='/dev/ttyACM0',  # 아두이노 시리얼 포트
+    use_arduino=False,  # 아두이노 LED 제어 사용 여부
+    target_classes=None,  # LED 상태를 변경할 대상 클래스(들)
+    detection_threshold=1,  # 감지 임계값 (이 값 이상의 객체가 감지되면 경고)
+    warning_threshold=3,  # 경고 임계값 (이 값 이상의 객체가 감지되면 위험)
 ):
     """
     Runs YOLOv5 detection inference on various sources like images, videos, directories, streams, etc.
@@ -133,6 +145,11 @@ def run(
         half (bool): If True, use FP16 half-precision inference. Default is False.
         dnn (bool): If True, use OpenCV DNN backend for ONNX inference. Default is False.
         vid_stride (int): Stride for processing video frames, to skip frames between processing. Default is 1.
+        arduino_port (str): 아두이노 시리얼 포트 경로. 기본값은 '/dev/ttyACM0'.
+        use_arduino (bool): 아두이노 LED 제어 사용 여부. 기본값은 False.
+        target_classes (list): LED 상태를 변경할 대상 클래스(들). 기본값은 None (모든 클래스).
+        detection_threshold (int): 감지 임계값 (이 값 이상의 객체가 감지되면 경고). 기본값은 1.
+        warning_threshold (int): 경고 임계값 (이 값 이상의 객체가 감지되면 위험). 기본값은 3.
 
     Returns:
         None
@@ -154,6 +171,23 @@ def run(
     screenshot = source.lower().startswith("screen")
     if is_url and is_file:
         source = check_file(source)  # download
+
+    # 아두이노 컨트롤러 초기화
+    arduino = None
+    if use_arduino and ArduinoController is not None:
+        try:
+            arduino = ArduinoController(port=arduino_port)
+            if not arduino.connected:
+                LOGGER.warning(f"아두이노 연결 실패. LED 제어 기능이 비활성화됩니다.")
+                arduino = None
+        except Exception as e:
+            LOGGER.warning(f"아두이노 초기화 실패: {e}")
+            arduino = None
+
+    # 대상 클래스 설정
+    if target_classes is None:
+        # 기본값: 사람(0)과 차량 관련(2, 5, 7) 클래스 설정
+        target_classes = [0, 2, 5, 7]
 
     # Directories
     save_dir = increment_path(Path(project) / name, exist_ok=exist_ok)  # increment run
@@ -219,6 +253,10 @@ def run(
             gn = torch.tensor(im0.shape)[[1, 0, 1, 0]]  # normalization gain whwh
             imc = im0.copy() if save_crop else im0  # for save_crop
             annotator = Annotator(im0, line_width=line_thickness, example=str(names))
+            
+            # 감지된 객체 수 초기화
+            target_count = 0
+            
             if len(det):
                 # Rescale boxes from img_size to im0 size
                 det[:, :4] = scale_boxes(im.shape[2:], det[:, :4], im0.shape).round()
@@ -227,6 +265,33 @@ def run(
                 for c in det[:, 5].unique():
                     n = (det[:, 5] == c).sum()  # detections per class
                     s += f"{n} {names[int(c)]}{'s' * (n > 1)}, "  # add to string
+                    
+                    # 대상 클래스에 속하는 객체 수 계산
+                    if int(c) in target_classes:
+                        target_count += int(n)
+
+                # 아두이노 LED 제어
+                if arduino is not None:
+                    if target_count == 0:
+                        # 감지된 객체 없음 - 초록색
+                        arduino.set_green()
+                    elif target_count >= warning_threshold:
+                        # 위험 임계값 이상 - 빨간색
+                        arduino.set_red()
+                    elif target_count >= detection_threshold:
+                        # 감지 임계값 이상 - 주황색
+                        arduino.set_orange()
+                
+                # 화면에 감지 정보 추가
+                cv2.putText(
+                    im0, 
+                    f"Objects: {target_count}", 
+                    (10, 30), 
+                    cv2.FONT_HERSHEY_SIMPLEX, 
+                    1, 
+                    (0, 255, 0) if target_count == 0 else (0, 165, 255) if target_count < warning_threshold else (0, 0, 255), 
+                    2
+                )
 
                 # Write results
                 for *xyxy, conf, cls in reversed(det):
@@ -248,8 +313,6 @@ def run(
             if view_img:
                 if platform.system() == "Linux" and p not in windows:
                     windows.append(p)
-                    cv2.namedWindow(str(p), cv2.WINDOW_NORMAL | cv2.WINDOW_KEEPRATIO)  # allow window resize (Linux)
-                    cv2.resizeWindow(str(p), im0.shape[1], im0.shape[0])
                 cv2.imshow(str(p), im0)
                 cv2.waitKey(1)  # 1 millisecond
 
@@ -273,62 +336,23 @@ def run(
                     vid_writer[i].write(im0)
 
         # Print time (inference-only)
-        LOGGER.info(f"{s}{'' if len(det) else '(no detections), '}{dt[1].dt * 1e3:.1f}ms")
+        LOGGER.info(f"{s}Done. ({dt[1].dt * 1E3:.1f}ms) Inference, ({dt[2].dt * 1E3:.1f}ms) NMS")
 
     # Print results
-    t = tuple(x.t / seen * 1e3 for x in dt)  # speeds per image
+    t = tuple(x.t / seen * 1E3 for x in dt)  # speeds per image
     LOGGER.info(f"Speed: %.1fms pre-process, %.1fms inference, %.1fms NMS per image at shape {(1, 3, *imgsz)}" % t)
     if save_txt or save_img:
         s = f"\n{len(list(save_dir.glob('labels/*.txt')))} labels saved to {save_dir / 'labels'}" if save_txt else ""
         LOGGER.info(f"Results saved to {colorstr('bold', save_dir)}{s}")
     if update:
         strip_optimizer(weights[0])  # update model (to fix SourceChangeWarning)
+        
+    # 아두이노 연결 종료
+    if arduino is not None:
+        arduino.disconnect()
 
 
 def parse_opt():
-    """
-    Parse command-line arguments for YOLOv5 detection, allowing custom inference options and model configurations.
-
-    Args:
-        --weights (str | list[str], optional): Model path or Triton URL. Defaults to ROOT / 'yolov5s.pt'.
-        --source (str, optional): File/dir/URL/glob/screen/0(webcam). Defaults to ROOT / 'data/images'.
-        --data (str, optional): Dataset YAML path. Provides dataset configuration information.
-        --imgsz (list[int], optional): Inference size (height, width). Defaults to [640].
-        --conf-thres (float, optional): Confidence threshold. Defaults to 0.25.
-        --iou-thres (float, optional): NMS IoU threshold. Defaults to 0.45.
-        --max-det (int, optional): Maximum number of detections per image. Defaults to 1000.
-        --device (str, optional): CUDA device, i.e., '0' or '0,1,2,3' or 'cpu'. Defaults to "".
-        --view-img (bool, optional): Flag to display results. Defaults to False.
-        --save-txt (bool, optional): Flag to save results to *.txt files. Defaults to False.
-        --save-csv (bool, optional): Flag to save results in CSV format. Defaults to False.
-        --save-conf (bool, optional): Flag to save confidences in labels saved via --save-txt. Defaults to False.
-        --save-crop (bool, optional): Flag to save cropped prediction boxes. Defaults to False.
-        --nosave (bool, optional): Flag to prevent saving images/videos. Defaults to False.
-        --classes (list[int], optional): List of classes to filter results by, e.g., '--classes 0 2 3'. Defaults to None.
-        --agnostic-nms (bool, optional): Flag for class-agnostic NMS. Defaults to False.
-        --augment (bool, optional): Flag for augmented inference. Defaults to False.
-        --visualize (bool, optional): Flag for visualizing features. Defaults to False.
-        --update (bool, optional): Flag to update all models in the model directory. Defaults to False.
-        --project (str, optional): Directory to save results. Defaults to ROOT / 'runs/detect'.
-        --name (str, optional): Sub-directory name for saving results within --project. Defaults to 'exp'.
-        --exist-ok (bool, optional): Flag to allow overwriting if the project/name already exists. Defaults to False.
-        --line-thickness (int, optional): Thickness (in pixels) of bounding boxes. Defaults to 3.
-        --hide-labels (bool, optional): Flag to hide labels in the output. Defaults to False.
-        --hide-conf (bool, optional): Flag to hide confidences in the output. Defaults to False.
-        --half (bool, optional): Flag to use FP16 half-precision inference. Defaults to False.
-        --dnn (bool, optional): Flag to use OpenCV DNN for ONNX inference. Defaults to False.
-        --vid-stride (int, optional): Video frame-rate stride, determining the number of frames to skip in between
-            consecutive frames. Defaults to 1.
-
-    Returns:
-        argparse.Namespace: Parsed command-line arguments as an argparse.Namespace object.
-
-    Example:
-        ```python
-        from ultralytics import YOLOv5
-        args = YOLOv5.parse_opt()
-        ```
-    """
     parser = argparse.ArgumentParser()
     parser.add_argument("--weights", nargs="+", type=str, default=ROOT / "yolov5s.pt", help="model path or triton URL")
     parser.add_argument("--source", type=str, default=ROOT / "data/images", help="file/dir/URL/glob/screen/0(webcam)")
@@ -344,13 +368,13 @@ def parse_opt():
         "--save-format",
         type=int,
         default=0,
-        help="whether to save boxes coordinates in YOLO format or Pascal-VOC format when save-txt is True, 0 for YOLO and 1 for Pascal-VOC",
+        help="save box coordinates format YOLO or Pascal-VOC (0 for YOLO, 1 for Pascal-VOC)",
     )
     parser.add_argument("--save-csv", action="store_true", help="save results in CSV format")
     parser.add_argument("--save-conf", action="store_true", help="save confidences in --save-txt labels")
     parser.add_argument("--save-crop", action="store_true", help="save cropped prediction boxes")
     parser.add_argument("--nosave", action="store_true", help="do not save images/videos")
-    parser.add_argument("--classes", nargs="+", type=int, default=[0, 2, 5, 7], help="filter by class: --classes 0, or --classes 0 2 3")
+    parser.add_argument("--classes", nargs="+", type=int, default=[0, 2, 5, 7], help="filter by class: person(0), car(2), bus(5), truck(7)")
     parser.add_argument("--agnostic-nms", action="store_true", help="class-agnostic NMS")
     parser.add_argument("--augment", action="store_true", help="augmented inference")
     parser.add_argument("--visualize", action="store_true", help="visualize features")
@@ -364,6 +388,14 @@ def parse_opt():
     parser.add_argument("--half", action="store_true", help="use FP16 half-precision inference")
     parser.add_argument("--dnn", action="store_true", help="use OpenCV DNN for ONNX inference")
     parser.add_argument("--vid-stride", type=int, default=1, help="video frame-rate stride")
+    
+    # 아두이노 LED 제어 관련 인자 추가
+    parser.add_argument("--arduino-port", type=str, default="/dev/ttyACM0", help="아두이노 시리얼 포트")
+    parser.add_argument("--use-arduino", action="store_true", help="아두이노 LED 제어 사용")
+    parser.add_argument("--target-classes", type=int, nargs="+", default=None, help="LED 상태를 변경할 대상 클래스(들)")
+    parser.add_argument("--detection-threshold", type=int, default=1, help="감지 임계값 (이 값 이상의 객체가 감지되면 경고)")
+    parser.add_argument("--warning-threshold", type=int, default=3, help="경고 임계값 (이 값 이상의 객체가 감지되면 위험)")
+    
     opt = parser.parse_args()
     opt.imgsz *= 2 if len(opt.imgsz) == 1 else 1  # expand
     print_args(vars(opt))
@@ -371,29 +403,7 @@ def parse_opt():
 
 
 def main(opt):
-    """
-    Executes YOLOv5 model inference based on provided command-line arguments, validating dependencies before running.
-
-    Args:
-        opt (argparse.Namespace): Command-line arguments for YOLOv5 detection. See function `parse_opt` for details.
-
-    Returns:
-        None
-
-    Note:
-        This function performs essential pre-execution checks and initiates the YOLOv5 detection process based on user-specified
-        options. Refer to the usage guide and examples for more information about different sources and formats at:
-        https://github.com/ultralytics/ultralytics
-
-    Example usage:
-
-    ```python
-    if __name__ == "__main__":
-        opt = parse_opt()
-        main(opt)
-    ```
-    """
-    check_requirements(exclude=("tensorboard", "thop"))  # check requirements
+    check_requirements(exclude=("tensorboard", "thop"))
     run(**vars(opt))
 
 
