@@ -83,7 +83,7 @@ def run(
     save_conf=False,  # save confidences in --save-txt labels
     save_crop=False,  # save cropped prediction boxes
     nosave=False,  # do not save images/videos
-    classes=None,  # filter by class: --class 0, or --class 0 2 3
+    classes=[0, 2, 5, 7],  # filter by class: person(0), car(2), bus(5), truck(7)
     agnostic_nms=False,  # class-agnostic NMS
     augment=False,  # augmented inference
     visualize=False,  # visualize features
@@ -118,7 +118,7 @@ def run(
         save_conf (bool): If True, include confidence scores in the saved results. Default is False.
         save_crop (bool): If True, save cropped prediction boxes. Default is False.
         nosave (bool): If True, do not save inference images or videos. Default is False.
-        classes (list[int]): List of class indices to filter detections by. Default is None.
+        classes (list[int]): List of class indices to filter detections by. Default is [0, 2, 5, 7] for person, car, bus, and truck.
         agnostic_nms (bool): If True, perform class-agnostic non-max suppression. Default is False.
         augment (bool): If True, use augmented inference. Default is False.
         visualize (bool): If True, visualize feature maps. Default is False.
@@ -386,7 +386,7 @@ def parse_opt():
     parser.add_argument("--save-conf", action="store_true", help="save confidences in --save-txt labels")
     parser.add_argument("--save-crop", action="store_true", help="save cropped prediction boxes")
     parser.add_argument("--nosave", action="store_true", help="do not save images/videos")
-    parser.add_argument("--classes", nargs="+", type=int, help="filter by class: --classes 0, or --classes 0 2 3")
+    parser.add_argument("--classes", nargs="+", type=int, default=[0, 2, 5, 7], help="filter by class: --classes 0, or --classes 0 2 3")
     parser.add_argument("--agnostic-nms", action="store_true", help="class-agnostic NMS")
     parser.add_argument("--augment", action="store_true", help="augmented inference")
     parser.add_argument("--visualize", action="store_true", help="visualize features")
