@@ -275,12 +275,9 @@ def run(
                     if target_count == 0:
                         # 감지된 객체 없음 - 초록색
                         arduino.set_green()
-                    elif target_count >= warning_threshold:
-                        # 위험 임계값 이상 - 빨간색
+                    else:
+                        # 객체가 감지됨 - 빨간색 (항상 빨간색으로 점등)
                         arduino.set_red()
-                    elif target_count >= detection_threshold:
-                        # 감지 임계값 이상 - 주황색
-                        arduino.set_orange()
                 
                 # 화면에 감지 정보 추가
                 cv2.putText(
@@ -289,7 +286,7 @@ def run(
                     (10, 30), 
                     cv2.FONT_HERSHEY_SIMPLEX, 
                     1, 
-                    (0, 255, 0) if target_count == 0 else (0, 165, 255) if target_count < warning_threshold else (0, 0, 255), 
+                    (0, 255, 0) if target_count == 0 else (0, 0, 255),  # 감지되면 항상 빨간색
                     2
                 )
 
