@@ -71,6 +71,7 @@ def run(
     arduino_port='/dev/ttyACM0',  # 아두이노 시리얼 포트
     use_arduino=False,  # 아두이노 LED 제어 사용 여부
     target_classes=None,  # LED 상태를 변경할 대상 클래스(들)
+    resolution=(1280, 720),  # 카메라 해상도 (너비, 높이)
 ):
     """
     YOLOv5 객체 감지 및 아두이노 LED 제어를 실행합니다.
@@ -110,8 +111,6 @@ def run(
     if target_classes is None:
         # 기본값: 사람(0), 자동차(2), 버스(5), 트럭(7) 감지
         target_classes = [0, 2, 5, 7]
-    
-    LOGGER.info(f"감지 대상 클래스: 사람(0), 자동차(2), 버스(5), 트럭(7)")
 
     # 디렉토리 설정
     save_dir = increment_path(Path(project) / name, exist_ok=exist_ok)  # increment run
@@ -127,6 +126,13 @@ def run(
     bs = 1  # batch_size
     if webcam:
         view_img = check_imshow(warn=True)
+        # 웹캠 설정 - 해상도 설정 추가
+        cap = cv2.VideoCapture(int(source) if source.isnumeric() else source)
+        if cap.isOpened():
+            cap.set(cv2.CAP_PROP_FRAME_WIDTH, resolution[0])
+            cap.set(cv2.CAP_PROP_FRAME_HEIGHT, resolution[1])
+            cap.release()
+        
         dataset = LoadStreams(source, img_size=imgsz, stride=stride, auto=pt, vid_stride=vid_stride)
         bs = len(dataset)
     elif screenshot:
@@ -204,6 +210,17 @@ def run(
                     1, 
                     (0, 255, 0) if target_count == 0 else (0, 0, 255),  # 감지 없음: 초록색, 감지됨: 빨간색
                     2
+                )
+                
+                # 해상도 정보 추가
+                cv2.putText(
+                    im0,
+                    f"해상도: {im0.shape[1]}x{im0.shape[0]}",
+                    (10, 70),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.8,
+                    (255, 255, 255),
+                    1
                 )
 
                 # 검출 결과 그리기
@@ -288,8 +305,18 @@ def parse_opt():
     parser.add_argument('--use-arduino', action='store_true', help='아두이노 LED 제어 사용')
     parser.add_argument('--target-classes', nargs='+', type=int, default=[0, 2, 5, 7], help='LED 상태를 변경할 대상 클래스(들) (기본: 사람, 차량)')
     
+    # 카메라 해상도 설정
+    parser.add_argument('--resolution', nargs='+', type=int, default=[1280, 720], help='카메라 해상도 [너비, 높이] (기본: 1280x720)')
+    
     opt = parser.parse_args()
     opt.imgsz *= 2 if len(opt.imgsz) == 1 else 1  # expand
+    
+    # 해상도 처리
+    if len(opt.resolution) == 2:
+        opt.resolution = tuple(opt.resolution)
+    else:
+        opt.resolution = (1280, 720)  # 기본값
+    
     print_args(vars(opt))
     return opt
 
