@@ -62,30 +62,19 @@ void loop() {
   receiveSerialCommand();
   
   // 객체가 감지된 경우 (빨간색) 깜박임 효과 적용
-  if (detectionLevel == 1 && isBlinking) {
-    static unsigned long lastBlinkTime = 0;
-    static boolean blinkState = true;
-    
-    // 500ms마다 깜박임
-    if (millis() - lastBlinkTime > 500) {
-      lastBlinkTime = millis();
-      blinkState = !blinkState;
-      
-      if (blinkState) {
-        setAllLEDs(RED_COLOR);
-        digitalWrite(BUILTIN_LED_PIN, HIGH);
-      } else {
-        setAllLEDs(BLACK_COLOR);
-        digitalWrite(BUILTIN_LED_PIN, LOW);
-      }
-    }
+  if (detectionLevel == 1) {
+    // 깜박임 대신 원형 빨간색 LED 표시
+    setCirclePattern(RED_COLOR);
+  } else if (detectionLevel == 0) {
+    // 감지 없음 - 원형 초록색 LED 표시
+    setCirclePattern(GREEN_COLOR);
   }
   
   // 시리얼 통신이 장시간 없을 경우 기본 상태(녹색)로 복귀
   if (millis() - lastCommandTime > serialTimeout && detectionLevel != 0) {
     detectionLevel = 0;
     isBlinking = false;
-    setAllLEDs(GREEN_COLOR);
+    setCirclePattern(GREEN_COLOR);
     Serial.println("시리얼 타임아웃: 기본 상태(녹색)로 복귀");
   }
   
@@ -138,14 +127,14 @@ void processCommand(char cmd) {
     // 감지 없음 - 초록색
     detectionLevel = 0;
     isBlinking = false;
-    setAllLEDs(GREEN_COLOR);
+    setCirclePattern(GREEN_COLOR);
     Serial.println("상태: 감지 없음 (초록색)");
   } 
   else if (command == '1') {
     // 감지됨 - 빨간색
     detectionLevel = 1;
-    isBlinking = true;  // 깜박임 활성화
-    setAllLEDs(RED_COLOR);
+    isBlinking = false;  // 깜박임 비활성화
+    setCirclePattern(RED_COLOR);
     Serial.println("상태: 감지됨 (빨간색)");
   }
   
@@ -156,6 +145,15 @@ void processCommand(char cmd) {
 
 // 모든 LED 설정
 void setAllLEDs(uint32_t color) {
+  for(int i=0; i<LED_COUNT; i++) {
+    strip.setPixelColor(i, color);
+  }
+  strip.show();
+}
+
+// 원형 패턴으로 LED 설정
+void setCirclePattern(uint32_t color) {
+  // LED를 원형으로 표시
   for(int i=0; i<LED_COUNT; i++) {
     strip.setPixelColor(i, color);
   }
