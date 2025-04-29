@@ -76,6 +76,7 @@ def run(
     target_classes=None,  # LED 상태를 변경할 대상 클래스(들)
     resolution=(640, 480),  # 카메라 해상도 (너비, 높이)
     use_cached_model=True,  # 모델 캐싱 사용 여부
+    display_scale=0.7,  # 출력 창 크기 비율 (기본: 0.7)
 ):
     """
     YOLOv5 객체 감지 및 아두이노 LED 제어를 실행합니다.
@@ -283,10 +284,18 @@ def run(
             im0 = annotator.result()
             if view_img:
                 if not webcam:  # 이미지 파일인 경우
-                    cv2.imshow(str(p), im0)
+                    # 고정된 크기(1280x720)로 이미지 조절
+                    display_img = cv2.resize(im0, (1280, 720), interpolation=cv2.INTER_AREA)
+                    cv2.imshow(str(p), display_img)
                     cv2.waitKey(1)  # 1 millisecond
                 else:  # 웹캠인 경우
-                    cv2.imshow('YOLOv5 Detection', im0)
+                    # 창 크기 조절 가능하도록 설정
+                    cv2.namedWindow('YOLOv5 Detection', cv2.WINDOW_NORMAL)
+                    # 고정된 크기(1280x720)로 설정
+                    display_img = cv2.resize(im0, (1280, 720), interpolation=cv2.INTER_AREA)
+                    cv2.resizeWindow('YOLOv5 Detection', 1280, 720)
+                    # 조절된 이미지 표시
+                    cv2.imshow('YOLOv5 Detection', display_img)
                     if cv2.waitKey(1) == ord('q'):  # q를 누르면 종료
                         break
 
@@ -358,6 +367,9 @@ def parse_opt():
     
     # 모델 캐싱 옵션
     parser.add_argument('--no-cache', action='store_true', help='모델 캐싱을 사용하지 않음 (기본: 사용)')
+    
+    # 출력 창 크기 설정
+    parser.add_argument('--display-scale', type=float, default=0.7, help='출력 창 크기 비율 (기본: 0.7)')
     
     opt = parser.parse_args()
     opt.imgsz *= 2 if len(opt.imgsz) == 1 else 1  # expand

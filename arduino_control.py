@@ -115,10 +115,6 @@ class ArduinoController:
             self.serial_conn.flush()  # 버퍼 내용 즉시 전송
             
             self.last_command = command
-            if command == '0':
-                print("감지 없음: 초록색 설정")
-            elif command == '1':
-                print("객체 감지: 빨간색 설정")
             
             # 응답 대기
             time.sleep(0.2)
@@ -131,11 +127,17 @@ class ArduinoController:
     
     def set_green(self):
         """LED를 녹색으로 설정 (감지 없음)"""
-        return self.send_command('0')
+        result = self.send_command('0')
+        if result:
+            print("객체 감지 없음: 초록색 설정")
+        return result
     
     def set_red(self):
         """LED를 빨간색으로 설정 (감지됨)"""
-        return self.send_command('1')
+        result = self.send_command('1')
+        if result:
+            print("객체 감지: 빨간색 설정")
+        return result
 
 # 라이브러리로 사용할 경우 여기서 중단
 if __name__ == "__main__":
