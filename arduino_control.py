@@ -95,12 +95,9 @@ class ArduinoController:
                 '1': 빨간색 LED (감지됨)
         """
         if not self.connected:
+            print("아두이노가 연결되지 않았습니다.")
             return False
         
-        # 같은 명령이 연속으로 전송되면 무시
-        if command == self.last_command:
-            return True
-            
         try:
             # 명령에 개행문자 추가하여 아두이노가 확실히 인식하도록 함
             cmd_str = command + '\n'
@@ -114,19 +111,33 @@ class ArduinoController:
             self.serial_conn.write(cmd_str.encode())
             self.serial_conn.flush()  # 버퍼 내용 즉시 전송
             
+            # 명령 실행 상태 업데이트
             self.last_command = command
             
+            # 안정성을 위해 명령 2번 전송
+            time.sleep(0.05)
+            self.serial_conn.write(cmd_str.encode())
+            self.serial_conn.flush()
+            
             # 응답 대기
-            time.sleep(0.2)
+            time.sleep(0.1)
+            
+            # 응답 확인 시도
+            if self.serial_conn.in_waiting > 0:
+                response = self.serial_conn.readline().decode('utf-8', errors='replace').strip()
+                self.debug_print(f"응답 수신: {response}")
             
             return True
                 
         except Exception as e:
             self.debug_print(f"명령 전송 실패: {e}")
+            # 연결 재시도
+            self.connect()
             return False
     
     def set_green(self):
         """LED를 녹색으로 설정 (감지 없음)"""
+        
         result = self.send_command('0')
         if result:
             print("객체 감지 없음: 초록색 설정")
@@ -192,4 +203,3 @@ if __name__ == "__main__":
             print("아두이노 연결 종료됨")
     else:
         print("아두이노에 연결할 수 없습니다.") 
-         
