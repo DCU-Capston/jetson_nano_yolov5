@@ -6,6 +6,7 @@ import argparse
 import os
 import sys
 from pathlib import Path
+import time
 
 import torch
 import cv2
@@ -41,6 +42,8 @@ except ImportError:
     LOGGER.info("아두이노 제어 모듈을 찾을 수 없습니다. arduino_control.py 파일이 경로에 있는지 확인하세요.")
     ArduinoController = None
 
+# 모델 캐싱 변수
+MODEL_CACHE = {}
 
 @smart_inference_mode()
 def run(
@@ -72,6 +75,7 @@ def run(
     use_arduino=False,  # 아두이노 LED 제어 사용 여부
     target_classes=None,  # LED 상태를 변경할 대상 클래스(들)
     resolution=(1280, 720),  # 카메라 해상도 (너비, 높이)
+    use_cached_model=True,  # 모델 캐싱 사용 여부
 ):
     """
     YOLOv5 객체 감지 및 아두이노 LED 제어를 실행합니다.
@@ -82,6 +86,8 @@ def run(
     
     감지 대상: 사람(0), 자동차(2), 버스(5), 트럭(7)
     """
+    global MODEL_CACHE
+    
     source = str(source)
     save_img = not nosave and not source.endswith(".txt")  # save inference images
     is_file = Path(source).suffix[1:] in (IMG_FORMATS + VID_FORMATS)
@@ -117,8 +123,20 @@ def run(
     (save_dir).mkdir(parents=True, exist_ok=True)  # make dir
 
     # 모델 로드
+    start_time = time.time()
     device = select_device(device)
-    model = DetectMultiBackend(weights, device=device, dnn=dnn, data=data, fp16=half)
+    
+    # 모델 캐싱 사용 시, 이전에 로드된 모델이 있으면 재사용
+    cache_key = f"{weights}_{device}_{half}_{dnn}"
+    if use_cached_model and cache_key in MODEL_CACHE:
+        model = MODEL_CACHE[cache_key]
+        print(f"캐시된 모델을 사용합니다. (로드 시간 절약)")
+    else:
+        model = DetectMultiBackend(weights, device=device, dnn=dnn, data=data, fp16=half)
+        if use_cached_model:
+            MODEL_CACHE[cache_key] = model
+            print(f"모델을 로드했습니다. ({time.time() - start_time:.2f}초)")
+    
     stride, names, pt = model.stride, model.names, model.pt
     imgsz = check_img_size(imgsz, s=stride)  # check image size
 
@@ -308,6 +326,9 @@ def parse_opt():
     # 카메라 해상도 설정
     parser.add_argument('--resolution', nargs='+', type=int, default=[1280, 720], help='카메라 해상도 [너비, 높이] (기본: 1280x720)')
     
+    # 모델 캐싱 옵션
+    parser.add_argument('--no-cache', action='store_true', help='모델 캐싱을 사용하지 않음 (기본: 사용)')
+    
     opt = parser.parse_args()
     opt.imgsz *= 2 if len(opt.imgsz) == 1 else 1  # expand
     
@@ -316,6 +337,9 @@ def parse_opt():
         opt.resolution = tuple(opt.resolution)
     else:
         opt.resolution = (1280, 720)  # 기본값
+    
+    # 모델 캐싱 옵션 처리
+    opt.use_cached_model = not opt.no_cache
     
     print_args(vars(opt))
     return opt
