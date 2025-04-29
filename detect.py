@@ -74,7 +74,7 @@ def run(
     arduino_port='/dev/ttyACM0',  # 아두이노 시리얼 포트
     use_arduino=False,  # 아두이노 LED 제어 사용 여부
     target_classes=None,  # LED 상태를 변경할 대상 클래스(들)
-    resolution=(1280, 720),  # 카메라 해상도 (너비, 높이)
+    resolution=(640, 480),  # 카메라 해상도 (너비, 높이)
     use_cached_model=True,  # 모델 캐싱 사용 여부
 ):
     """
@@ -222,7 +222,7 @@ def run(
                 # 화면에 감지 정보 추가
                 cv2.putText(
                     im0, 
-                    f"사람/차량: {target_count}", 
+                    f"person/car: {target_count}", 
                     (10, 30), 
                     cv2.FONT_HERSHEY_SIMPLEX, 
                     1, 
@@ -230,17 +230,6 @@ def run(
                     2
                 )
                 
-                # 해상도 정보 추가
-                cv2.putText(
-                    im0,
-                    f"해상도: {im0.shape[1]}x{im0.shape[0]}",
-                    (10, 70),
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    0.8,
-                    (255, 255, 255),
-                    1
-                )
-
                 # 검출 결과 그리기
                 for *xyxy, conf, cls in reversed(det):
                     # 화면에 경계 상자 표시
@@ -324,7 +313,7 @@ def parse_opt():
     parser.add_argument('--target-classes', nargs='+', type=int, default=[0, 2, 5, 7], help='LED 상태를 변경할 대상 클래스(들) (기본: 사람, 차량)')
     
     # 카메라 해상도 설정
-    parser.add_argument('--resolution', nargs='+', type=int, default=[1280, 720], help='카메라 해상도 [너비, 높이] (기본: 1280x720)')
+    parser.add_argument('--resolution', nargs='+', type=int, default=[640, 480], help='카메라 해상도 [너비, 높이] (기본: 640x480)')
     
     # 모델 캐싱 옵션
     parser.add_argument('--no-cache', action='store_true', help='모델 캐싱을 사용하지 않음 (기본: 사용)')
@@ -336,7 +325,7 @@ def parse_opt():
     if len(opt.resolution) == 2:
         opt.resolution = tuple(opt.resolution)
     else:
-        opt.resolution = (1280, 720)  # 기본값
+        opt.resolution = (640, 480)  # 기본값
     
     # 모델 캐싱 옵션 처리
     opt.use_cached_model = not opt.no_cache
