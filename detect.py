@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 # YOLOv5 객체 감지 및 아두이노 LED 제어 프로그램
 # 객체 감지 여부에 따라 LED 색상 제어: 감지 없음 - 초록색, 감지됨 - 빨간색
 
