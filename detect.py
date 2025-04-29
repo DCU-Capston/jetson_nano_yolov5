@@ -227,14 +227,8 @@ def run(
                         # 감지된 객체 없음 - 초록색
                         arduino.set_green()
                     else:
-                        # 객체가 감지됨 - 한번만 빨간색 신호 전송
-                        # 이전 상태가 감지 없음인 경우에만 빨간색 신호 전송
-                        if not hasattr(arduino, 'last_detection') or arduino.last_detection is False:
-                            arduino.set_red()
-                            arduino.last_detection = True
-                    
-                    # 감지 상태 업데이트
-                    arduino.last_detection = (target_count > 0)
+                        # 객체가 감지됨 - 빨간색
+                        arduino.set_red()
                 
                 # 화면에 감지 정보 추가 (사람과 차량 구분)
                 cv2.putText(

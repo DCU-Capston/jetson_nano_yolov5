@@ -15,12 +15,10 @@ char command = '0';
 int detectionLevel = 0;  // 0: 감지 없음(초록), 1: 감지됨(빨강)
 unsigned long lastCommandTime = 0;
 unsigned long serialTimeout = 5000;  // 시리얼 타임아웃(밀리초)
-boolean isBlinking = false;  // 깜박임 상태
 
 // 색상 정의
 uint32_t GREEN_COLOR;
 uint32_t RED_COLOR;
-uint32_t BLACK_COLOR;
 
 // NeoPixel 객체 초기화
 Adafruit_NeoPixel strip(LED_COUNT, LED_PIN, NEO_GRB + NEO_KHZ800);
@@ -38,10 +36,9 @@ void setup() {
   // 색상 초기화
   GREEN_COLOR = strip.Color(0, 255, 0);   // RGB: 초록색
   RED_COLOR = strip.Color(255, 0, 0);     // RGB: 빨간색
-  BLACK_COLOR = strip.Color(0, 0, 0);     // RGB: 검정색 (꺼짐)
   
   // 초기 LED 색상은 초록색 설정
-  setAllLEDs(GREEN_COLOR);
+  setCirclePattern(GREEN_COLOR);
   
   // 시리얼 통신 시작 (9600bps)
   Serial.begin(9600);
@@ -61,21 +58,21 @@ void loop() {
   // 시리얼 통신으로부터 명령 수신
   receiveSerialCommand();
   
-  // 객체가 감지된 경우 (빨간색) 깜박임 효과 적용
+  // 상태에 따라 LED 패턴 설정
   if (detectionLevel == 1) {
-    // 깜박임 대신 원형 빨간색 LED 표시
-    setCirclePattern(RED_COLOR);
-  } else if (detectionLevel == 0) {
-    // 감지 없음 - 원형 초록색 LED 표시
-    setCirclePattern(GREEN_COLOR);
+    // 감지됨 - 빨간색 원형 LED
+    digitalWrite(BUILTIN_LED_PIN, HIGH);  // 내장 LED도 켜기
+  } else {
+    // 감지 없음 - 초록색 원형 LED
+    digitalWrite(BUILTIN_LED_PIN, LOW);   // 내장 LED 끄기
   }
   
   // 시리얼 통신이 장시간 없을 경우 기본 상태(녹색)로 복귀
   if (millis() - lastCommandTime > serialTimeout && detectionLevel != 0) {
     detectionLevel = 0;
-    isBlinking = false;
     setCirclePattern(GREEN_COLOR);
     Serial.println("시리얼 타임아웃: 기본 상태(녹색)로 복귀");
+    digitalWrite(BUILTIN_LED_PIN, LOW);
   }
   
   // 짧은 지연 시간
@@ -93,9 +90,6 @@ void receiveSerialCommand() {
     // 한 문자씩 읽기
     char inChar = (char)Serial.read();
     
-    // 명령을 받았다는 표시로 내장 LED 켜기
-    digitalWrite(BUILTIN_LED_PIN, HIGH);
-    
     // 개행문자는 명령의 끝으로 처리
     if (inChar == '\n' || inChar == '\r') {
       if (inputString.length() > 0) {
@@ -112,9 +106,6 @@ void receiveSerialCommand() {
       processCommand(inputString.charAt(0));
       inputString = "";
     }
-    
-    // 명령 처리 후 내장 LED 끄기
-    digitalWrite(BUILTIN_LED_PIN, LOW);
   }
 }
 
@@ -126,14 +117,12 @@ void processCommand(char cmd) {
   if (command == '0') {
     // 감지 없음 - 초록색
     detectionLevel = 0;
-    isBlinking = false;
     setCirclePattern(GREEN_COLOR);
     Serial.println("상태: 감지 없음 (초록색)");
   } 
   else if (command == '1') {
     // 감지됨 - 빨간색
     detectionLevel = 1;
-    isBlinking = false;  // 깜박임 비활성화
     setCirclePattern(RED_COLOR);
     Serial.println("상태: 감지됨 (빨간색)");
   }
@@ -143,18 +132,10 @@ void processCommand(char cmd) {
   Serial.println(detectionLevel);
 }
 
-// 모든 LED 설정
-void setAllLEDs(uint32_t color) {
-  for(int i=0; i<LED_COUNT; i++) {
-    strip.setPixelColor(i, color);
-  }
-  strip.show();
-}
-
 // 원형 패턴으로 LED 설정
 void setCirclePattern(uint32_t color) {
-  // LED를 원형으로 표시
-  for(int i=0; i<LED_COUNT; i++) {
+  // 모든 LED를 같은 색상으로 설정 (원형 패턴)
+  for (int i = 0; i < LED_COUNT; i++) {
     strip.setPixelColor(i, color);
   }
   strip.show();
