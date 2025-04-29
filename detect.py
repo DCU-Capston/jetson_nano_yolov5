@@ -201,6 +201,9 @@ def run(
                 det[:, :4] = scale_boxes(im.shape[2:], det[:, :4], im0.shape).round()
 
                 # Print results
+                person_count = 0  # 사람 수 카운터
+                vehicle_count = 0  # 차량 수 카운터 (자동차, 버스, 트럭)
+                
                 for c in det[:, 5].unique():
                     n = (det[:, 5] == c).sum()  # detections per class
                     s += f"{n} {names[int(c)]}{'s' * (n > 1)}, "  # add to string
@@ -209,6 +212,12 @@ def run(
                     # target_classes에 해당 클래스가 포함되어 있어도 확인 (항상 포함되어 있어야 함)
                     if int(c) in target_classes:
                         target_count += int(n)
+                        
+                        # 사람과 차량을 구분하여 카운트
+                        if int(c) == 0:  # 사람
+                            person_count += int(n)
+                        elif int(c) in [2, 5, 7]:  # 자동차(2), 버스(5), 트럭(7)
+                            vehicle_count += int(n)
 
                 # 아두이노 LED 제어
                 if arduino is not None:
@@ -219,15 +228,47 @@ def run(
                         # 객체가 감지됨 - 빨간색
                         arduino.set_red()
                 
-                # 화면에 감지 정보 추가
+                # 화면에 감지 정보 추가 (사람과 차량 구분)
                 cv2.putText(
                     im0, 
-                    f"person/car: {target_count}", 
+                    f"Person: {person_count}", 
                     (10, 30), 
+                    cv2.FONT_HERSHEY_SIMPLEX, 
+                    0.8, 
+                    (0, 255, 255),  # 노란색
+                    2
+                )
+                
+                cv2.putText(
+                    im0, 
+                    f"Vehicle: {vehicle_count}", 
+                    (10, 60), 
+                    cv2.FONT_HERSHEY_SIMPLEX, 
+                    0.8, 
+                    (255, 0, 255),  # 보라색
+                    2
+                )
+                
+                # 전체 감지 객체 수 표시
+                cv2.putText(
+                    im0, 
+                    f"Total: {target_count}", 
+                    (10, 90), 
                     cv2.FONT_HERSHEY_SIMPLEX, 
                     1, 
                     (0, 255, 0) if target_count == 0 else (0, 0, 255),  # 감지 없음: 초록색, 감지됨: 빨간색
                     2
+                )
+                
+                # 해상도 정보 추가
+                cv2.putText(
+                    im0,
+                    f"Resolution: {im0.shape[1]}x{im0.shape[0]}",
+                    (10, 120),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.6,
+                    (255, 255, 255),  # 흰색
+                    1
                 )
                 
                 # 검출 결과 그리기
