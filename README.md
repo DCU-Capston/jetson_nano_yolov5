@@ -28,7 +28,7 @@
 
 ```bash
 # 필요한 패키지 설치
-pip install -r requirements.txt
+pip3 install -r requirements.txt
 
 # 아두이노 시리얼 포트 권한 설정 (Linux/macOS)
 sudo usermod -a -G dialout $USER
@@ -45,13 +45,13 @@ sudo usermod -a -G dialout $USER
 
 ```bash
 # 웹캠으로 객체 감지 및 아두이노 LED 제어 (기본 포트 /dev/ttyACM0)
-python detect.py --weights yolov5s.pt --source 0 --use-arduino
+python3 detect.py --weights yolov5s.pt --source 0 --use-arduino
 
 # 다른 아두이노 포트 지정
-python detect.py --weights yolov5s.pt --source 0 --use-arduino --arduino-port /dev/ttyUSB0
+python3 detect.py --weights yolov5s.pt --source 0 --use-arduino --arduino-port /dev/ttyUSB0
 
 # macOS의 경우 (포트 예시)
-python detect.py --weights yolov5s.pt --source 0 --use-arduino --arduino-port /dev/cu.usbmodem14201
+python3 detect.py --weights yolov5s.pt --source 0 --use-arduino --arduino-port /dev/cu.usbmodem14201
 ```
 
 ### 3. 감지 옵션 조정
@@ -60,13 +60,13 @@ python detect.py --weights yolov5s.pt --source 0 --use-arduino --arduino-port /d
 
 ```bash
 # 사람만 감지 (클래스 0)
-python detect.py --weights yolov5s.pt --source 0 --use-arduino --classes 0
+python3 detect.py --weights yolov5s.pt --source 0 --use-arduino --classes 0
 
 # 자동차만 감지 (클래스 2)
-python detect.py --weights yolov5s.pt --source 0 --use-arduino --classes 2
+python3 detect.py --weights yolov5s.pt --source 0 --use-arduino --classes 2
 
 # 모든 클래스 감지 (COCO 데이터셋의 80개 클래스)
-python detect.py --weights yolov5s.pt --source 0 --use-arduino --classes
+python3 detect.py --weights yolov5s.pt --source 0 --use-arduino --classes
 ```
 
 ## 성능 최적화 팁
@@ -78,7 +78,7 @@ python detect.py --weights yolov5s.pt --source 0 --use-arduino --classes
 
 ```bash
 # 최적화된 설정으로 웹캠 실행
-python detect.py --weights yolov5n.pt --img 320 --conf 0.25 --source 0 --half --use-arduino
+python3 detect.py --weights yolov5n.pt --img 320 --conf 0.25 --source 0 --half --use-arduino
 ```
 
 ## 자주 묻는 질문
